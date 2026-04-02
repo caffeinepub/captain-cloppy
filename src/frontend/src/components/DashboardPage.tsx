@@ -1,18 +1,13 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { Bitcoin, Bot, Coins, TrendingUp } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useListStrategies } from "../hooks/useQueries";
 import {
   type OdinToken,
-  formatBtcAsSats,
   formatPriceAsSats,
   formatPriceDelta,
   getTokenImageUrl,
   getTokens,
-  getUserBalances,
-  getUserTrades,
 } from "../lib/odinApi";
-import { KpiCard } from "./KpiCard";
 import { PrincipalBanner } from "./PrincipalBanner";
 import { TokenDetailModal } from "./TokenDetailModal";
 
@@ -90,60 +85,12 @@ export function DashboardPage({
   onSetPrincipal,
   onSelectToken,
 }: DashboardPageProps) {
-  const [btcBalance, setBtcBalance] = useState<string | null>(null);
-  const [tokenHoldings, setTokenHoldings] = useState<number | null>(null);
-  const [trades24h, setTrades24h] = useState<number | null>(null);
-  const [loadingBalances, setLoadingBalances] = useState(false);
-  const [loadingTrades, setLoadingTrades] = useState(false);
   const [trendingTokens, setTrendingTokens] = useState<OdinToken[]>([]);
   const [loadingTrending, setLoadingTrending] = useState(false);
 
   // Token detail modal state
   const [detailToken, setDetailToken] = useState<OdinToken | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-
-  const { data: strategies } = useListStrategies();
-  const activeBots = strategies?.filter((s) => s.active).length ?? 0;
-
-  useEffect(() => {
-    if (!principal) return;
-    setLoadingBalances(true);
-    getUserBalances(principal)
-      .then((balances) => {
-        const btc = balances.find(
-          (b) =>
-            b.id === "btc" ||
-            b.type === "internal" ||
-            b.ticker?.toLowerCase() === "btc",
-        );
-        setBtcBalance(btc ? formatBtcAsSats(btc.balance) : "0 sats");
-        setTokenHoldings(
-          balances.filter(
-            (b) => b.id !== "btc" && b.ticker?.toLowerCase() !== "btc",
-          ).length,
-        );
-      })
-      .catch(() => {
-        setBtcBalance("\u2014");
-        setTokenHoldings(0);
-      })
-      .finally(() => setLoadingBalances(false));
-  }, [principal]);
-
-  useEffect(() => {
-    if (!principal) return;
-    setLoadingTrades(true);
-    getUserTrades(principal, 1, 100)
-      .then(({ data }) => {
-        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-        const count = data.filter(
-          (t) => new Date(t.time).getTime() > cutoff,
-        ).length;
-        setTrades24h(count);
-      })
-      .catch(() => setTrades24h(0))
-      .finally(() => setLoadingTrades(false));
-  }, [principal]);
 
   useEffect(() => {
     setLoadingTrending(true);
@@ -161,52 +108,6 @@ export function DashboardPage({
   return (
     <div className="space-y-5 md:space-y-6">
       {!principal && <PrincipalBanner onSet={onSetPrincipal} />}
-
-      <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
-        <KpiCard
-          ocid="kpi.btc_balance.card"
-          title="BTC Balance"
-          value={btcBalance ?? (principal ? "Loading\u2026" : "\u2014")}
-          icon={Bitcoin}
-          badge={principal ? "Live" : undefined}
-          badgeType="success"
-          loading={loadingBalances && !!principal}
-        />
-        <KpiCard
-          ocid="kpi.token_holdings.card"
-          title="Token Holdings"
-          value={
-            tokenHoldings !== null
-              ? String(tokenHoldings)
-              : principal
-                ? "Loading\u2026"
-                : "\u2014"
-          }
-          icon={Coins}
-          loading={loadingBalances && !!principal}
-        />
-        <KpiCard
-          ocid="kpi.active_bots.card"
-          title="Active Bots"
-          value={String(activeBots)}
-          icon={Bot}
-          badge={activeBots > 0 ? "Running" : undefined}
-          badgeType="success"
-        />
-        <KpiCard
-          ocid="kpi.trades_24h.card"
-          title="24h Trades"
-          value={
-            trades24h !== null
-              ? String(trades24h)
-              : principal
-                ? "Loading\u2026"
-                : "\u2014"
-          }
-          icon={TrendingUp}
-          loading={loadingTrades && !!principal}
-        />
-      </div>
 
       {/* Trending Tokens */}
       <div className="rounded-xl border border-border bg-card p-4 md:p-5 shadow-card">
@@ -253,53 +154,6 @@ export function DashboardPage({
               ))}
         </div>
       </div>
-
-      {/* Recent Strategies */}
-      {strategies && strategies.length > 0 && (
-        <div className="rounded-xl border border-border bg-card p-4 md:p-5 shadow-card">
-          <h3 className="text-sm font-semibold text-foreground mb-4">
-            Active Strategies
-          </h3>
-          <div className="space-y-2">
-            {strategies.slice(0, 5).map((s, i) => (
-              <div
-                key={s.name}
-                data-ocid={`dashboard.strategy.item.${i + 1}`}
-                className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-3 md:px-4"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {s.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    {s.tokenId}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 ml-3">
-                  <span
-                    className={[
-                      "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                      s.tradeType === "buy"
-                        ? "bg-success/15 text-success"
-                        : "bg-destructive/15 text-destructive",
-                    ].join(" ")}
-                  >
-                    {s.tradeType.toUpperCase()}
-                  </span>
-                  <span
-                    className={[
-                      "h-2 w-2 rounded-full",
-                      s.active
-                        ? "bg-success animate-pulse-amber"
-                        : "bg-muted-foreground",
-                    ].join(" ")}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Token Detail Modal */}
       <TokenDetailModal
