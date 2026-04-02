@@ -1,0 +1,329 @@
+const BASE_URL = "https://api.odin.fun/v1";
+
+export interface OdinToken {
+  id: string;
+  name: string;
+  ticker: string;
+  price: number;
+  image?: string;
+  marketcap?: number;
+  volume?: number;
+  bonded?: boolean;
+  price_1d?: number;
+  holder_count?: number;
+  progress?: number;
+  created_time?: string;
+  supply?: number;
+}
+
+export interface OdinBalance {
+  id: string;
+  ticker: string;
+  name: string;
+  balance: number;
+  type: string;
+}
+
+export interface OdinTrade {
+  id: string;
+  user: string;
+  token: string;
+  /** token_id is the raw token identifier used for API lookups */
+  token_id?: string;
+  time: string;
+  buy: boolean;
+  amount_btc: number;
+  amount_token: number;
+  price: number;
+  bonded: boolean;
+  user_username?: string;
+}
+
+export interface OdinTradesResponse {
+  data: OdinTrade[];
+  count: number;
+}
+
+export interface OdinTokensParams {
+  page?: number;
+  limit?: number;
+  sort?: string;
+  bonded?: boolean;
+  search?: string;
+}
+
+export interface OdinTokensResponse {
+  data: OdinToken[];
+  count: number;
+}
+
+export async function searchTokens(query: string): Promise<OdinToken[]> {
+  if (!query.trim()) return [];
+  const res = await fetch(
+    `${BASE_URL}/tokens?search=${encodeURIComponent(query)}&limit=10`,
+  );
+  if (!res.ok) throw new Error("Failed to fetch tokens");
+  const json = await res.json();
+  return json.data ?? [];
+}
+
+export async function getTokens(
+  params: OdinTokensParams = {},
+): Promise<OdinTokensResponse> {
+  const qs = new URLSearchParams();
+  if (params.page !== undefined) qs.set("page", String(params.page));
+  if (params.limit !== undefined) qs.set("limit", String(params.limit));
+  if (params.sort) qs.set("sort", params.sort);
+  if (params.bonded !== undefined) qs.set("bonded", String(params.bonded));
+  if (params.search) qs.set("search", params.search);
+  const res = await fetch(`${BASE_URL}/tokens?${qs.toString()}`);
+  if (!res.ok) throw new Error("Failed to fetch tokens");
+  const json = await res.json();
+  return { data: json.data ?? [], count: json.count ?? 0 };
+}
+
+export async function getGlobalTrades(
+  page = 1,
+  limit = 20,
+): Promise<OdinTradesResponse> {
+  const res = await fetch(
+    `${BASE_URL}/trades?limit=${limit}&page=${page}&sort=time:desc`,
+  );
+  if (!res.ok) throw new Error("Failed to fetch global trades");
+  const json = await res.json();
+  const data: OdinTrade[] = (json.data ?? []).map(
+    (t: OdinTrade & { token_id?: string }) => ({
+      ...t,
+      token_id: t.token_id ?? t.token,
+    }),
+  );
+  return { data, count: json.count ?? 0 };
+}
+
+export async function getTokenDetail(
+  tokenId: string,
+): Promise<OdinToken | null> {
+  if (!tokenId.trim()) return null;
+  const res = await fetch(`${BASE_URL}/token/${encodeURIComponent(tokenId)}`);
+  if (!res.ok) return null;
+  const json = await res.json();
+  return json.data ?? null;
+}
+
+export async function getUserBalances(
+  principal: string,
+): Promise<OdinBalance[]> {
+  if (!principal.trim()) return [];
+  const res = await fetch(
+    `${BASE_URL}/user/${encodeURIComponent(principal)}/balances`,
+  );
+  if (!res.ok) throw new Error("Failed to fetch balances");
+  const json = await res.json();
+  return json.data ?? [];
+}
+
+export async function getUserTrades(
+  principal: string,
+  page = 1,
+  limit = 20,
+): Promise<OdinTradesResponse> {
+  if (!principal.trim()) return { data: [], count: 0 };
+  const res = await fetch(
+    `${BASE_URL}/trades?user=${encodeURIComponent(principal)}&limit=${limit}&page=${page}`,
+  );
+  if (!res.ok) throw new Error("Failed to fetch trades");
+  const json = await res.json();
+  const data: OdinTrade[] = (json.data ?? []).map(
+    (t: OdinTrade & { token_id?: string }) => ({
+      ...t,
+      token_id: t.token_id ?? t.token,
+    }),
+  );
+  return { data, count: json.count ?? 0 };
+}
+
+export async function getToken(tokenId: string): Promise<OdinToken | null> {
+  if (!tokenId.trim()) return null;
+  // Try canonical /tokens/{id} endpoint first
+  const res = await fetch(`${BASE_URL}/tokens/${encodeURIComponent(tokenId)}`);
+  if (res.ok) {
+    const json = await res.json();
+    const t = json.data ?? json;
+    if (t?.id) return t as OdinToken;
+  }
+  // Fallback to legacy /token/{id}
+  const res2 = await fetch(`${BASE_URL}/token/${encodeURIComponent(tokenId)}`);
+  if (!res2.ok) return null;
+  const json2 = await res2.json();
+  return json2.data ?? json2 ?? null;
+}
+
+// ─── BTC price fetching ─────────────────────────────────────────────────────
+
+// Fallback sats per BTC (approximate current rate)
+export const SATS_PER_BTC_FALLBACK = 99_998_558;
+
+let _cachedSatsPerBtc: number = SATS_PER_BTC_FALLBACK;
+let _lastFetchTime = 0;
+const CACHE_DURATION_MS = 60_000; // refresh every 60 seconds
+
+export async function fetchSatsPerBtc(): Promise<number> {
+  const now = Date.now();
+  if (now - _lastFetchTime < CACHE_DURATION_MS) {
+    return _cachedSatsPerBtc;
+  }
+  try {
+    const res = await fetch(
+      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd",
+      { headers: { Accept: "application/json" } },
+    );
+    if (res.ok) {
+      const json = await res.json();
+      const usdPrice: number = json?.bitcoin?.usd;
+      if (usdPrice && usdPrice > 0) {
+        _cachedSatsPerBtc = 100_000_000;
+        _lastFetchTime = now;
+        return _cachedSatsPerBtc;
+      }
+    }
+  } catch {
+    // ignore, use fallback
+  }
+  return _cachedSatsPerBtc;
+}
+
+export const SATS_PER_BTC = 100_000_000;
+
+/**
+ * Odin API stores token `price` and `marketcap` in milli-satoshi units (1/1000 of a sat).
+ * Divide by 1000 to get the real satoshi value for display.
+ */
+export const ODIN_PRICE_DIVISOR = 1_000;
+
+/**
+ * Odin API stores `amount_token` and `supply` in units where
+ * total supply = 2,100,000,000 (i.e., 21,000,000 * 100).
+ * Divide by 100 to get the human-readable token amount matching odin.fun display.
+ */
+export const ODIN_TOKEN_AMOUNT_DIVISOR = 100;
+
+/** Format a satoshi value for display */
+export function formatSats(sats: number): string {
+  if (sats === 0) return "0 sats";
+  if (sats < 1) {
+    return `${sats.toFixed(4)} sats`;
+  }
+  if (sats >= 1_000_000_000) {
+    return `${(sats / 1_000_000_000).toFixed(4)}B sats`;
+  }
+  if (sats >= 1_000_000) {
+    return `${(sats / 1_000_000).toFixed(4)}M sats`;
+  }
+  if (sats >= 1_000) {
+    return `${(sats / 1_000).toFixed(2)}K sats`;
+  }
+  return `${sats.toFixed(2)} sats`;
+}
+
+/** Format BTC amount (from Odin internal units) as sats.
+ * amount_btc in trades/balances is already in raw satoshis (int64). */
+export function formatBtcAsSats(odinBtcValue: number): string {
+  const sats = odinBtcValue;
+  if (sats >= 1_000_000_000) {
+    return `${(sats / 1_000_000_000).toFixed(4)}B sats`;
+  }
+  if (sats >= 1_000_000) {
+    return `${(sats / 1_000_000).toFixed(2)}M sats`;
+  }
+  if (sats >= 1_000) {
+    return `${(sats / 1_000).toFixed(2)}K sats`;
+  }
+  return `${sats.toFixed(0)} sats`;
+}
+
+/** Format token price in sats (price per token).
+ * Odin token `price` field is in milli-satoshi (1/1000 sat), so divide by 1000. */
+export function formatPriceAsSats(price: number): string {
+  const sats = price / ODIN_PRICE_DIVISOR;
+  if (sats === 0) return "0 sats";
+  if (sats < 0.0001) return `${sats.toFixed(8)} sats`;
+  if (sats < 0.01) return `${sats.toFixed(6)} sats`;
+  if (sats < 1) return `${sats.toFixed(4)} sats`;
+  if (sats < 1_000) return `${sats.toFixed(2)} sats`;
+  if (sats >= 1_000_000_000)
+    return `${(sats / 1_000_000_000).toFixed(4)}B sats`;
+  if (sats >= 1_000_000) return `${(sats / 1_000_000).toFixed(4)}M sats`;
+  return `${(sats / 1_000).toFixed(2)}K sats`;
+}
+
+/** Format market cap in sats.
+ * Odin `marketcap` field is also in milli-satoshi units. */
+export function formatMcapAsSats(mcap: number): string {
+  const sats = mcap / ODIN_PRICE_DIVISOR;
+  if (sats >= 1_000_000_000_000)
+    return `${(sats / 1_000_000_000_000).toFixed(2)}T sats`;
+  if (sats >= 1_000_000_000)
+    return `${(sats / 1_000_000_000).toFixed(2)}B sats`;
+  if (sats >= 1_000_000) return `${(sats / 1_000_000).toFixed(2)}M sats`;
+  if (sats >= 1_000) return `${(sats / 1_000).toFixed(2)}K sats`;
+  return `${sats.toFixed(2)} sats`;
+}
+
+/**
+ * Format token amount from raw API value to human-readable.
+ * Odin stores amount_token with 2 extra decimal places (÷100).
+ * Total supply in API = 2,100,000,000 → display as 21,000,000.
+ */
+export function formatTokenAmount(rawAmount: number): string {
+  const amount = rawAmount / ODIN_TOKEN_AMOUNT_DIVISOR;
+  if (amount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(2)}B`;
+  if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(2)}M`;
+  if (amount >= 1_000) return `${(amount / 1_000).toFixed(2)}K`;
+  if (amount < 1 && amount > 0) return amount.toFixed(4);
+  return amount.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+// Legacy helpers kept for backward compat
+export function satsToBtc(sats: number): number {
+  return sats / 100_000_000;
+}
+
+export function formatBtc(sats: number): string {
+  return formatBtcAsSats(sats);
+}
+
+export function formatPrice(price: number): string {
+  return formatPriceAsSats(price);
+}
+
+export function formatDate(dateStr: string | number | bigint): string {
+  const d = new Date(
+    typeof dateStr === "bigint"
+      ? Number(dateStr / 1_000_000n)
+      : typeof dateStr === "number" && dateStr > 1e12
+        ? dateStr
+        : Number(dateStr) * 1000,
+  );
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** Format price delta (price_1d etc) for display.
+ * price_1d is int64 in milli-satoshi units, same as price. */
+export function formatPriceDelta(delta: number): string {
+  if (delta === 0) return "0%";
+  // price_1d from Odin is a delta in milli-sats; convert to % change relative
+  // to current price is not possible here without current price, so format as sats delta
+  const satsAbs = Math.abs(delta) / ODIN_PRICE_DIVISOR;
+  const formatted = formatSats(satsAbs);
+  return delta > 0 ? `+${formatted}` : `-${formatted}`;
+}
+
+export function getTokenImageUrl(tokenId?: string): string | undefined {
+  if (!tokenId) return undefined;
+  return `https://api.odin.fun/v1/tokens/${tokenId}/image`;
+}

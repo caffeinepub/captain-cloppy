@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/assets/fonts/PlusJakartaSans.woff2") format("woff2");
+}
+
+@layer base {
+  :root {
+    --radius: 0.75rem;
+    /* Dark crypto dashboard - always dark */
+    --background: 0.13 0.008 240;
+    --foreground: 0.92 0.008 220;
+    --card: 0.16 0.01 240;
+    --card-foreground: 0.92 0.008 220;
+    --popover: 0.18 0.012 240;
+    --popover-foreground: 0.92 0.008 220;
+    --primary: 0.78 0.14 70;
+    --primary-foreground: 0.12 0.01 240;
+    --secondary: 0.22 0.012 240;
+    --secondary-foreground: 0.85 0.008 220;
+    --muted: 0.2 0.01 240;
+    --muted-foreground: 0.58 0.015 230;
+    --accent: 0.78 0.14 70;
+    --accent-foreground: 0.12 0.01 240;
+    --destructive: 0.62 0.22 25;
+    --destructive-foreground: 0.98 0 0;
+    --success: 0.65 0.18 145;
+    --success-foreground: 0.12 0 0;
+    --border: 0.24 0.012 240;
+    --input: 0.22 0.012 240;
+    --ring: 0.78 0.14 70;
+    --chart-1: 0.78 0.14 70;
+    --chart-2: 0.65 0.18 145;
+    --chart-3: 0.62 0.22 25;
+    --chart-4: 0.56 0.18 260;
+    --chart-5: 0.72 0.12 200;
+    --sidebar: 0.155 0.01 240;
+    --sidebar-foreground: 0.92 0.008 220;
+    --sidebar-primary: 0.78 0.14 70;
+    --sidebar-primary-foreground: 0.12 0.01 240;
+    --sidebar-accent: 0.78 0.14 70 / 10%;
+    --sidebar-accent-foreground: 0.78 0.14 70;
+    --sidebar-border: 0.22 0.012 240;
+    --sidebar-ring: 0.78 0.14 70;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: oklch(var(--background));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(var(--border));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(var(--muted-foreground));
+  }
+}
