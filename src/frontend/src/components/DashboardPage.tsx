@@ -1,7 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Bitcoin, Bot, Coins, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useBtcPrice } from "../hooks/useBtcPrice";
 import { useListStrategies } from "../hooks/useQueries";
 import {
   type OdinToken,
@@ -105,7 +104,6 @@ export function DashboardPage({
 
   const { data: strategies } = useListStrategies();
   const activeBots = strategies?.filter((s) => s.active).length ?? 0;
-  const { btcUsd, lastUpdated, loading: priceLoading } = useBtcPrice();
 
   useEffect(() => {
     if (!principal) return;
@@ -155,14 +153,6 @@ export function DashboardPage({
       .finally(() => setLoadingTrending(false));
   }, []);
 
-  const updatedStr = lastUpdated
-    ? lastUpdated.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      })
-    : null;
-
   const handleTokenClick = (token: OdinToken) => {
     setDetailToken(token);
     setDetailOpen(true);
@@ -171,44 +161,6 @@ export function DashboardPage({
   return (
     <div className="space-y-5 md:space-y-6">
       {!principal && <PrincipalBanner onSet={onSetPrincipal} />}
-
-      {/* BTC Live Price Banner */}
-      <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5">
-        <div className="flex items-center gap-2">
-          <Bitcoin className="h-4 w-4 text-primary" />
-          <span className="text-xs font-semibold text-foreground">BTC/USD</span>
-          {priceLoading && (
-            <span className="text-xs text-muted-foreground">
-              Updating\u2026
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-sm font-bold text-primary">
-            {btcUsd != null
-              ? `$${btcUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-              : "Loading\u2026"}
-          </span>
-          <span className="text-[10px] text-muted-foreground">
-            1 BTC = 100,000,000 sats
-          </span>
-          {updatedStr && (
-            <span className="hidden sm:inline text-[10px] text-muted-foreground">
-              Updated {updatedStr}
-            </span>
-          )}
-          <span
-            className={[
-              "h-1.5 w-1.5 rounded-full",
-              priceLoading
-                ? "bg-amber-400 animate-pulse"
-                : btcUsd
-                  ? "bg-success"
-                  : "bg-muted-foreground",
-            ].join(" ")}
-          />
-        </div>
-      </div>
 
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
         <KpiCard
