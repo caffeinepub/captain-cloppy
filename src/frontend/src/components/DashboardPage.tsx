@@ -155,7 +155,7 @@ function TrendingTokenCard({
   );
 }
 
-// ─── Global Feed Mini ────────────────────────────────────────────────────────
+// ─── Mini Global Feed ────────────────────────────────────────────────────────
 
 const FEED_SKELETON_IDS = ["f1", "f2", "f3", "f4", "f5"] as const;
 
@@ -205,7 +205,9 @@ function GlobalFeedMini() {
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <Activity className="h-4 w-4 text-primary" />
-        <h3 className="text-sm font-semibold text-foreground">Global Feed</h3>
+        <h3 className="text-sm font-semibold text-foreground">
+          Mini Global Feed
+        </h3>
         <div className="ml-auto flex items-center gap-2">
           {lastRefreshed && (
             <span className="text-[10px] text-muted-foreground/60 hidden sm:inline">
@@ -368,7 +370,7 @@ export function DashboardPage({
         </div>
       </div>
 
-      {/* Global Feed Mini */}
+      {/* Mini Global Feed */}
       <GlobalFeedMini />
 
       {/* Token Detail Modal */}
