@@ -92,6 +92,10 @@ export interface OdinToken {
   progress?: number;
   created_time?: string;
   supply?: number;
+  twitter?: string;
+  website?: string;
+  telegram?: string;
+  description?: string;
 }
 
 export interface OdinBalance {
@@ -117,6 +121,12 @@ export interface OdinTrade {
   price: number;
   bonded: boolean;
   user_username?: string;
+  /** receiver principal if it's a transfer/send */
+  receiver?: string;
+  /** sender principal if it's a receive */
+  sender?: string;
+  /** trade type: buy/sell/transfer */
+  trade_type?: string;
 }
 
 export interface OdinTradesResponse {
@@ -171,13 +181,16 @@ export async function getGlobalTrades(
   );
   if (!res.ok) throw new Error("Failed to fetch global trades");
   const json = await res.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw: OdinTrade[] = (json.data ?? []).map(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (t: any) =>
       ({
         ...t,
         token_id: t.token_id ?? t.token,
         token_ticker: t.token_ticker ?? t.token_name ?? t.ticker ?? undefined,
+        receiver: t.receiver ?? t.to ?? undefined,
+        sender: t.sender ?? t.from ?? undefined,
+        trade_type: t.trade_type ?? t.type ?? undefined,
       }) as OdinTrade,
   );
   const data = await enrichTradesWithTickers(raw);
@@ -217,13 +230,16 @@ export async function getUserTrades(
   );
   if (!res.ok) throw new Error("Failed to fetch trades");
   const json = await res.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw: OdinTrade[] = (json.data ?? []).map(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (t: any) =>
       ({
         ...t,
         token_id: t.token_id ?? t.token,
         token_ticker: t.token_ticker ?? t.token_name ?? t.ticker ?? undefined,
+        receiver: t.receiver ?? t.to ?? undefined,
+        sender: t.sender ?? t.from ?? undefined,
+        trade_type: t.trade_type ?? t.type ?? undefined,
       }) as OdinTrade,
   );
   const data = await enrichTradesWithTickers(raw);
@@ -337,11 +353,19 @@ export function formatBtcAsSats(odinBtcValue: number): string {
  * btcUsd: current BTC price in USD (from useBtcPrice hook).
  */
 export function formatBtcWithUsd(
-  odinBtcValue: number,
+  odinBtcValue: number | undefined | null,
   btcUsd: number | null,
 ): string {
+  // Guard against null/undefined/NaN
+  const rawVal = odinBtcValue ?? 0;
+  if (!Number.isFinite(rawVal) || rawVal <= 0) {
+    return btcUsd != null && btcUsd > 0
+      ? "0.00000000 BTC ($0.00)"
+      : "0.00000000 BTC";
+  }
+
   // amount_btc from Odin trades is in milli-satoshi; divide by 1000 to get sats
-  const sats = odinBtcValue / 1_000;
+  const sats = rawVal / 1_000;
   const btc = sats / SATS_PER_BTC;
 
   // Format BTC value
@@ -375,10 +399,32 @@ export function formatBtcWithUsd(
   return btcStr;
 }
 
+/**
+ * Format USD value directly from milli-satoshi BTC amount.
+ * Used for showing dollar value standalone (no BTC prefix).
+ */
+export function formatUsdFromMsats(
+  msats: number | undefined | null,
+  btcUsd: number | null,
+): string {
+  const rawVal = msats ?? 0;
+  if (!Number.isFinite(rawVal) || !btcUsd || btcUsd <= 0) return "$0.00";
+  const sats = rawVal / 1_000;
+  const btc = sats / SATS_PER_BTC;
+  const usd = btc * btcUsd;
+  if (usd >= 1_000_000) return `$${(usd / 1_000_000).toFixed(2)}M`;
+  if (usd >= 1_000) return `$${(usd / 1_000).toFixed(2)}K`;
+  if (usd >= 1) return `$${usd.toFixed(2)}`;
+  if (usd >= 0.01) return `$${usd.toFixed(4)}`;
+  return `$${usd.toFixed(6)}`;
+}
+
 /** Format token price in sats (price per token).
  * Odin token `price` field is in milli-satoshi (1/1000 sat), so divide by 1000. */
-export function formatPriceAsSats(price: number): string {
-  const sats = price / ODIN_PRICE_DIVISOR;
+export function formatPriceAsSats(price: number | undefined | null): string {
+  const p = price ?? 0;
+  if (!Number.isFinite(p) || p <= 0) return "0 sats";
+  const sats = p / ODIN_PRICE_DIVISOR;
   if (sats === 0) return "0 sats";
   if (sats < 0.0001) return `${sats.toFixed(8)} sats`;
   if (sats < 0.01) return `${sats.toFixed(6)} sats`;
@@ -395,12 +441,17 @@ export function formatPriceAsSats(price: number): string {
  * Odin `marketcap` field is in milli-satoshi units.
  * Convert: msats / 1000 = sats / 100,000,000 = BTC * btcUsd = USD
  */
-export function formatMcapAsUsd(mcap: number, btcUsd: number | null): string {
+export function formatMcapAsUsd(
+  mcap: number | undefined | null,
+  btcUsd: number | null,
+): string {
+  const m = mcap ?? 0;
+  if (!Number.isFinite(m) || m <= 0) return "$0";
   if (!btcUsd || btcUsd <= 0) {
     // Fallback: show in sats
-    return formatMcapAsSats(mcap);
+    return formatMcapAsSats(m);
   }
-  const sats = mcap / ODIN_PRICE_DIVISOR;
+  const sats = m / ODIN_PRICE_DIVISOR;
   const btc = sats / SATS_PER_BTC;
   const usd = btc * btcUsd;
   if (usd >= 1_000_000_000) return `$${(usd / 1_000_000_000).toFixed(2)}B`;
@@ -415,13 +466,15 @@ export function formatMcapAsUsd(mcap: number, btcUsd: number | null): string {
  * Odin `volume` field is in milli-satoshi units.
  */
 export function formatVolumeAsUsd(
-  volume: number,
+  volume: number | undefined | null,
   btcUsd: number | null,
 ): string {
+  const v = volume ?? 0;
+  if (!Number.isFinite(v) || v <= 0) return "$0";
   if (!btcUsd || btcUsd <= 0) {
-    return formatMcapAsSats(volume);
+    return formatMcapAsSats(v);
   }
-  const sats = volume / ODIN_PRICE_DIVISOR;
+  const sats = v / ODIN_PRICE_DIVISOR;
   const btc = sats / SATS_PER_BTC;
   const usd = btc * btcUsd;
   if (usd >= 1_000_000_000) return `$${(usd / 1_000_000_000).toFixed(2)}B`;
@@ -449,8 +502,12 @@ export function formatMcapAsSats(mcap: number): string {
  * Verified: raw ~1,870,000,000,000,000 ÷ 100,000,000,000 ≈ 18,700 (matches odin.fun 18.7K display)
  * Total supply raw = 2,100,000,000,000,000,000 ÷ 100,000,000,000 = 21,000,000.
  */
-export function formatTokenAmount(rawAmount: number): string {
-  const amount = rawAmount / ODIN_TOKEN_AMOUNT_DIVISOR;
+export function formatTokenAmount(
+  rawAmount: number | undefined | null,
+): string {
+  const raw = rawAmount ?? 0;
+  if (!Number.isFinite(raw) || raw <= 0) return "0";
+  const amount = raw / ODIN_TOKEN_AMOUNT_DIVISOR;
   if (amount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(2)}B`;
   if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(2)}M`;
   if (amount >= 1_000) return `${(amount / 1_000).toFixed(2)}K`;

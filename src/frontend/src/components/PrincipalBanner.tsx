@@ -1,49 +1,20 @@
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { Wallet } from "lucide-react";
 
 interface PrincipalBannerProps {
   onSet: (principal: string) => void;
 }
 
-export function PrincipalBanner({ onSet }: PrincipalBannerProps) {
-  const [value, setValue] = useState("");
-
+export function PrincipalBanner({ onSet: _onSet }: PrincipalBannerProps) {
   return (
-    <div className="rounded-xl border border-primary/30 bg-primary/5 px-5 py-5 flex items-start gap-4">
-      <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-      <div className="flex-1">
-        <p className="text-sm font-semibold text-foreground">
-          Enter Your Principal ID
+    <div className="rounded-xl border border-border bg-muted/20 px-5 py-4 flex items-center gap-3 opacity-60">
+      <Wallet className="h-5 w-5 shrink-0 text-muted-foreground" />
+      <div>
+        <p className="text-sm font-medium text-muted-foreground">
+          Wallet connect coming soon
         </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Enter your Odin.fun principal ID to view balances, trades, and run the
-          bot.
+        <p className="text-xs text-muted-foreground/70 mt-0.5">
+          Connect your Bitcoin wallet to view balances and execute trades
         </p>
-
-        <div className="mt-3 flex gap-2">
-          <Input
-            data-ocid="principal.input"
-            placeholder="e.g. 2vxsx-fae or your principal ID"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            className="h-9 text-sm bg-background border-border"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && value.trim()) onSet(value.trim());
-            }}
-          />
-          <Button
-            data-ocid="principal.submit_button"
-            size="sm"
-            className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
-            onClick={() => {
-              if (value.trim()) onSet(value.trim());
-            }}
-          >
-            Connect
-          </Button>
-        </div>
       </div>
     </div>
   );
