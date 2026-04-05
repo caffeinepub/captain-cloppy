@@ -59,11 +59,11 @@ export function Sidebar({
           alt="Captain Cloppy Logo"
           className="h-14 w-14 rounded-xl object-contain flex-shrink-0 shadow-sm bg-black"
         />
-        <div className="flex-1 min-w-0">
-          <span className="text-base font-bold text-white tracking-tight leading-tight">
+        <div className="flex flex-col min-w-0">
+          <span className="text-sm font-bold text-white tracking-tight leading-tight whitespace-nowrap">
             Captain Cloppy
           </span>
-          <p className="text-[11px] text-zinc-400 leading-none mt-0.5">
+          <p className="text-[11px] text-zinc-400 leading-none mt-0.5 whitespace-nowrap">
             ODIN•FUN
           </p>
         </div>
@@ -72,7 +72,7 @@ export function Sidebar({
           type="button"
           onClick={onClose}
           aria-label="Close sidebar"
-          className="md:hidden flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white transition-colors"
+          className="md:hidden flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white transition-colors ml-auto flex-shrink-0"
         >
           <X className="h-4 w-4" />
         </button>
