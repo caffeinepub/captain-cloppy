@@ -4,6 +4,7 @@ import {
   Activity,
   ArrowDownRight,
   ArrowUpRight,
+  Flame,
   TrendingUp,
   Zap,
 } from "lucide-react";
@@ -12,6 +13,7 @@ import { useBtcPrice } from "../hooks/useBtcPrice";
 import {
   type OdinToken,
   type OdinTrade,
+  SATS_PER_BTC,
   formatBtcWithUsd,
   formatMcapAsUsd,
   formatPriceAsSats,
@@ -48,6 +50,18 @@ function formatRelativeTime(raw: string | number | undefined): string {
 function getPriceChangePercent(token: OdinToken): number | null {
   if (!token.price_1d || token.price_1d === 0) return null;
   return ((token.price - token.price_1d) / Math.abs(token.price_1d)) * 100;
+}
+
+/** Convert Odin amount_btc (milli-satoshi) to USD */
+function msatsToUsd(
+  msats: number | undefined | null,
+  btcUsd: number | null,
+): number {
+  const raw = msats ?? 0;
+  if (!Number.isFinite(raw) || !btcUsd || btcUsd <= 0) return 0;
+  const sats = raw / 1_000;
+  const btc = sats / SATS_PER_BTC;
+  return btc * btcUsd;
 }
 
 // ─── Trending Token Card (visual) ───────────────────────────────────────────
@@ -155,6 +169,180 @@ function TrendingTokenCard({
   );
 }
 
+// ─── Large Transactions Feed ─────────────────────────────────────────────────
+
+const LARGE_TX_THRESHOLD_USD = 500;
+const LARGE_TX_SKELETON_IDS = ["lt1", "lt2", "lt3"] as const;
+
+function LargeTransactionsFeed() {
+  const [largeTrades, setLargeTrades] = useState<OdinTrade[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isLive, setIsLive] = useState(true);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { btcUsd } = useBtcPrice();
+
+  const fetchLarge = useCallback(
+    (isInitial = false) => {
+      if (isInitial) setLoading(true);
+      getGlobalTrades(1, 50)
+        .then(({ data }) => {
+          if (!btcUsd) return;
+          const filtered = data
+            .filter(
+              (t) => msatsToUsd(t.amount_btc, btcUsd) >= LARGE_TX_THRESHOLD_USD,
+            )
+            .slice(0, 3);
+          setLargeTrades(filtered);
+          setLastRefreshed(new Date());
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (isInitial) setLoading(false);
+        });
+    },
+    [btcUsd],
+  );
+
+  useEffect(() => {
+    fetchLarge(true);
+  }, [fetchLarge]);
+
+  useEffect(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    if (isLive) {
+      intervalRef.current = setInterval(() => fetchLarge(false), 15_000);
+    }
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [isLive, fetchLarge]);
+
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-card p-4 md:p-5 shadow-card">
+      <div className="flex items-center gap-2 mb-3">
+        <Flame className="h-4 w-4 text-amber-400" />
+        <h3 className="text-sm font-semibold text-foreground">
+          Large Transactions
+        </h3>
+        <span className="text-[10px] text-amber-400/70 font-medium">
+          &gt;$500
+        </span>
+        <div className="ml-auto flex items-center gap-2">
+          {lastRefreshed && (
+            <span className="text-[10px] text-muted-foreground/60 hidden sm:inline">
+              {lastRefreshed.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setIsLive((v) => !v)}
+            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border transition-colors ${
+              isLive
+                ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                : "bg-muted/40 text-muted-foreground border-border"
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                isLive ? "bg-amber-400 animate-pulse" : "bg-muted-foreground"
+              }`}
+            />
+            {isLive ? "LIVE" : "PAUSED"}
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        {loading ? (
+          LARGE_TX_SKELETON_IDS.map((id) => (
+            <Skeleton key={id} className="h-12 w-full rounded-lg" />
+          ))
+        ) : largeTrades.length === 0 ? (
+          <div className="text-center py-6 text-xs text-muted-foreground/50">
+            No transactions above $500 in the latest batch
+          </div>
+        ) : (
+          largeTrades.map((trade, i) => {
+            const isBuy = trade.buy ?? false;
+            const ticker = trade.token_ticker ?? trade.token_id ?? "—";
+            const timestamp = trade.time ?? 0;
+            const btcAmt = trade.amount_btc ?? 0;
+            const usdVal = msatsToUsd(btcAmt, btcUsd);
+
+            return (
+              <div
+                key={trade.id ?? i}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2 hover:bg-muted/40 transition-colors ${
+                  isBuy
+                    ? "bg-emerald-500/5 border-emerald-500/20"
+                    : "bg-red-500/5 border-red-500/20"
+                }`}
+                data-ocid={`dashboard.large-tx.item.${i + 1}`}
+              >
+                <Badge
+                  variant="outline"
+                  className={`text-[9px] px-1.5 py-0 font-bold shrink-0 h-4 ${
+                    isBuy
+                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                      : "bg-red-500/15 text-red-400 border-red-500/30"
+                  }`}
+                >
+                  {isBuy ? "BUY" : "SELL"}
+                </Badge>
+
+                <span className="text-xs font-bold text-foreground min-w-[36px]">
+                  {ticker.length > 8 ? `${ticker.slice(0, 6)}…` : ticker}
+                </span>
+
+                <span
+                  className={`font-mono text-[10px] font-semibold flex-1 truncate ${
+                    isBuy ? "text-emerald-400" : "text-red-400"
+                  }`}
+                >
+                  {formatBtcWithUsd(btcAmt, btcUsd)}
+                </span>
+
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+                  $
+                  {usdVal >= 1_000
+                    ? `${(usdVal / 1_000).toFixed(1)}K`
+                    : usdVal.toFixed(0)}
+                </span>
+
+                <div className="flex flex-col items-end shrink-0">
+                  <span className="text-[9px] text-muted-foreground/70 font-mono">
+                    {trade.user_username
+                      ? trade.user_username.length > 10
+                        ? `${trade.user_username.slice(0, 8)}…`
+                        : trade.user_username
+                      : trade.user
+                        ? `${trade.user.slice(0, 6)}…`
+                        : "—"}
+                  </span>
+                  <span className="text-[9px] text-muted-foreground/50">
+                    {formatRelativeTime(timestamp)}
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Mini Global Feed ────────────────────────────────────────────────────────
 
 const FEED_SKELETON_IDS = ["f1", "f2", "f3", "f4", "f5"] as const;
@@ -202,7 +390,6 @@ function GlobalFeedMini() {
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 md:p-5 shadow-card">
-      {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <Activity className="h-4 w-4 text-primary" />
         <h3 className="text-sm font-semibold text-foreground">
@@ -237,7 +424,6 @@ function GlobalFeedMini() {
         </div>
       </div>
 
-      {/* Feed list */}
       <div className="space-y-1.5">
         {loading
           ? FEED_SKELETON_IDS.map((id) => (
@@ -255,7 +441,6 @@ function GlobalFeedMini() {
                   className="flex items-center gap-2 rounded-lg bg-muted/20 border border-border/40 px-3 py-2 hover:bg-muted/40 transition-colors"
                   data-ocid={`dashboard.feed.item.${i + 1}`}
                 >
-                  {/* Buy/Sell badge */}
                   <Badge
                     variant="outline"
                     className={`text-[9px] px-1.5 py-0 font-bold shrink-0 h-4 ${
@@ -267,12 +452,10 @@ function GlobalFeedMini() {
                     {isBuy ? "BUY" : "SELL"}
                   </Badge>
 
-                  {/* Token ticker */}
                   <span className="text-xs font-bold text-foreground min-w-[36px]">
                     {ticker.length > 8 ? `${ticker.slice(0, 6)}…` : ticker}
                   </span>
 
-                  {/* Value */}
                   <span
                     className={`font-mono text-[10px] font-semibold flex-1 truncate ${
                       isBuy ? "text-emerald-400" : "text-red-400"
@@ -281,7 +464,6 @@ function GlobalFeedMini() {
                     {formatBtcWithUsd(btcAmt, btcUsd)}
                   </span>
 
-                  {/* Trader + time */}
                   <div className="flex flex-col items-end shrink-0">
                     <span className="text-[9px] text-muted-foreground/70 font-mono">
                       {trade.user_username
@@ -333,6 +515,9 @@ export function DashboardPage({
 
   return (
     <div className="space-y-5 md:space-y-6">
+      {/* Large Transactions Feed — paling atas */}
+      <LargeTransactionsFeed />
+
       {/* Trending Tokens — visual card grid */}
       <div className="rounded-xl border border-border bg-card p-4 md:p-5 shadow-card">
         <div className="flex items-center gap-2 mb-4">
@@ -345,7 +530,6 @@ export function DashboardPage({
           </span>
         </div>
 
-        {/* Responsive card grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
           {loadingTrending
             ? TRENDING_SKELETON_IDS.map((id) => (
