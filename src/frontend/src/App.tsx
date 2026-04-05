@@ -7,11 +7,13 @@ import {
   Menu,
   Settings,
   TrendingUp,
+  User,
 } from "lucide-react";
 import { useState } from "react";
 import { BotPage } from "./components/BotPage";
 import { DashboardPage } from "./components/DashboardPage";
 import { HistoryPage } from "./components/HistoryPage";
+import { ProfilePage } from "./components/ProfilePage";
 import { type NavPage, Sidebar } from "./components/Sidebar";
 import { TokenExplorerPage } from "./components/TokenExplorerPage";
 import { TradingPage } from "./components/TradingPage";
@@ -47,6 +49,11 @@ const PAGE_TITLES: Record<
     subtitle: "Full audit trail",
     short: "History",
   },
+  profile: {
+    title: "Trader Profile",
+    subtitle: "Portfolio & Statistics",
+    short: "Profile",
+  },
 };
 
 const BOTTOM_NAV_ITEMS: {
@@ -57,8 +64,8 @@ const BOTTOM_NAV_ITEMS: {
   { page: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { page: "trading", label: "Trading", icon: TrendingUp },
   { page: "explorer", label: "Explorer", icon: Compass },
-  { page: "bot", label: "Bot", icon: Bot },
   { page: "history", label: "History", icon: History },
+  { page: "profile", label: "Profile", icon: User },
 ];
 
 export default function App() {
@@ -168,6 +175,12 @@ export default function App() {
             <HistoryPage
               principal={principal}
               onSetPrincipal={handleConnected}
+              onSelectToken={handleSelectToken}
+            />
+          )}
+          {page === "profile" && (
+            <ProfilePage
+              principal={principal}
               onSelectToken={handleSelectToken}
             />
           )}

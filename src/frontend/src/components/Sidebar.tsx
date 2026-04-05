@@ -5,10 +5,17 @@ import {
   LayoutDashboard,
   LifeBuoy,
   TrendingUp,
+  User,
   X,
 } from "lucide-react";
 
-export type NavPage = "dashboard" | "trading" | "explorer" | "bot" | "history";
+export type NavPage =
+  | "dashboard"
+  | "trading"
+  | "explorer"
+  | "bot"
+  | "history"
+  | "profile";
 
 interface SidebarProps {
   activePage: NavPage;
@@ -27,6 +34,7 @@ const navItems: {
   { page: "explorer", label: "Explorer", icon: Compass },
   { page: "bot", label: "Bot", icon: Bot },
   { page: "history", label: "History", icon: History },
+  { page: "profile", label: "Profile", icon: User },
 ];
 
 export function Sidebar({
