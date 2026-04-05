@@ -1351,16 +1351,16 @@ export function ProfilePage({
                   <div
                     key={t.id}
                     data-ocid={`profile.history.item.${i + 1}`}
-                    className="px-4 py-3 hover:bg-muted/20 transition-colors"
+                    className={`px-4 py-3.5 hover:bg-muted/30 transition-colors ${t.buy ? "border-l-2 border-success/40" : "border-l-2 border-destructive/40"}`}
                   >
-                    {/* Row 1: Token + buy/sell */}
+                    {/* Row 1: Logo + ticker + badge + value */}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         {t.token_id && (
                           <img
                             src={`https://api.odin.fun/v1/token/${t.token_id}/image`}
                             alt={ticker}
-                            className="rounded-full shrink-0 object-cover bg-muted w-7 h-7"
+                            className="rounded-full shrink-0 object-cover bg-muted w-7 h-7 ring-1 ring-border/40"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display =
                                 "none";
@@ -1381,45 +1381,42 @@ export function ProfilePage({
                           {t.bonded && <BondedCheck />}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {t.buy ? (
-                          <ArrowDownLeft className="h-3.5 w-3.5 text-success" />
-                        ) : (
-                          <ArrowUpRight className="h-3.5 w-3.5 text-destructive" />
-                        )}
+                      <div className="flex items-center gap-2 shrink-0">
                         <span
-                          className={`text-[11px] font-bold ${
-                            t.buy ? "text-success" : "text-destructive"
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            t.buy
+                              ? "bg-success/15 text-success"
+                              : "bg-destructive/15 text-destructive"
                           }`}
                         >
                           {t.buy ? "BUY" : "SELL"}
                         </span>
+                        <span className="font-mono text-xs text-foreground">
+                          {formatBtcWithUsd(t.amount_btc, btcUsd)}
+                        </span>
                       </div>
                     </div>
-                    {/* Row 2: Date */}
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-xs text-muted-foreground">
+                    {/* Row 2: Date · relative time */}
+                    <div className="flex items-center gap-1 mt-1.5 pl-9">
+                      <span className="text-[11px] text-muted-foreground">
                         {formatDate(t.time)}
                       </span>
-                      <span className="text-[10px] text-muted-foreground/60">
+                      <span className="text-[11px] text-muted-foreground/50">
+                        ·
+                      </span>
+                      <span className="text-[11px] text-muted-foreground/60">
                         {formatRelativeTime(t.time)}
                       </span>
                     </div>
-                    {/* Row 3: Value */}
-                    <div className="mt-1">
-                      <span className="font-mono text-xs text-foreground">
-                        {formatBtcWithUsd(t.amount_btc, btcUsd)}
+                    {/* Row 3: Amount @ price */}
+                    <div className="flex items-center gap-1.5 mt-0.5 pl-9">
+                      <span className="text-[11px] text-muted-foreground">
+                        {formatTokenAmount(t.amount_token)}
                       </span>
-                    </div>
-                    {/* Row 4: Token amount + price */}
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-muted-foreground">
-                        Amt: {formatTokenAmount(t.amount_token)}
+                      <span className="text-[11px] text-muted-foreground/40">
+                        @
                       </span>
-                      <span className="text-[10px] text-muted-foreground/50">
-                        .
-                      </span>
-                      <span className="text-[10px] text-primary font-mono">
+                      <span className="text-[11px] text-primary font-mono">
                         {formatPriceAsSats(t.price)}
                       </span>
                     </div>
