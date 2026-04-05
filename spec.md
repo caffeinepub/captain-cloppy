@@ -1,28 +1,32 @@
-# Captain Cloppy - Strategy Lab
+# Captain Cloppy
 
 ## Current State
-The app has a 'Bot Automation' (BotPage.tsx) page with basic strategy CRUD (create/edit/delete/toggle). It connects to backend hooks for strategies. Navigation in Sidebar and App.tsx references the 'bot' page.
+Dashboard shows: Large Transactions, Hot Tokens grid, Mini Global Feed. No platform-wide stats section exists.
 
 ## Requested Changes (Diff)
 
 ### Add
-- New `StrategyLabPage.tsx` component replacing BotPage.tsx
-- Backtest Simulator: user picks a token, entry price, strategy type (BUY dip / SELL pump / DCA), date range, and runs a simulated backtest using historical candle data from Odin.fun API
-- Paper Trading Tracker: list of simulated open positions (stored in localStorage), showing entry price, current price, P&L
-- Strategy Builder: UI to configure conditions (price target %, stop loss %, DCA interval) and save strategies locally
+- `PlatformStatsSection` component in `DashboardPage.tsx` that fetches `GET https://api.odin.fun/v1/statistics/dashboard` and displays:
+  - 4 stat cards: Total Tokens, Bonded Tokens, Total Users, Total Liquidity (USD)
+  - All-time Volume (USD) and 24h Volume (USD) as additional stats
+  - A 30-day trading volume bar chart using `trades_30d` data (dates + volume in milli-sats converted to USD)
+- This section is placed **between the Header and Large Transactions** (i.e., at the very top of the dashboard content)
+- Auto-refresh every 60 seconds
+- Skeleton loading states while data is being fetched
 
 ### Modify
-- Sidebar.tsx: rename 'Bot' label to 'Strategy Lab', change icon from Bot to FlaskConical
-- App.tsx: rename page title from 'Bot Automation' to 'Strategy Lab', update subtitle to 'Backtest & simulate trading strategies'
-- Replace `<BotPage />` render with `<StrategyLabPage />`
+- `DashboardPage.tsx`: add `PlatformStatsSection` at the top of the dashboard layout (above `LargeTransactionsFeed`)
+- `odinApi.ts`: add `getStatsDashboard()` function that fetches and returns the statistics/dashboard data
 
 ### Remove
-- BotPage.tsx is effectively replaced (keep file to avoid breaking imports, but StrategyLabPage is what renders)
+- Nothing removed
 
 ## Implementation Plan
-1. Create `StrategyLabPage.tsx` with 3 tabs: Backtest, Paper Trading, Strategy Builder
-2. Backtest tab: token selector (search by ticker from API), entry/exit conditions form, date range, fetch candles from Odin API, simulate trades, show results (total return %, trades executed, win rate, max drawdown)
-3. Paper Trading tab: add simulated position (token, amount, entry price), list open positions with current price fetched live, show P&L per position and total, store in localStorage
-4. Strategy Builder tab: form to configure strategy (name, token, buy condition, sell condition, stop loss, DCA settings), save list to localStorage, show saved strategies
-5. Update Sidebar.tsx: icon FlaskConical, label 'Strategy Lab'
-6. Update App.tsx: title 'Strategy Lab', subtitle 'Backtest & simulate strategies', import StrategyLabPage
+1. Add `getStatsDashboard()` to `odinApi.ts` returning the full stats object (bonded, tokens, total_users, total_value_tokens, total_volume_24h, total_volume_all, value_liquidity, trades_30d, activities_30d)
+2. Create `PlatformStatsSection` component inside `DashboardPage.tsx`:
+   - Fetches stats on mount, refreshes every 60s
+   - Shows 4 stat cards in a 2x2 grid (mobile) / 4-col row (desktop): Total Tokens, Bonded, Total Users, Total Liquidity USD
+   - Shows All-time Volume and 24h Volume
+   - Renders a simple 30-day bar chart using inline SVG or div bars (no extra chart library needed) showing daily volume in USD
+   - All milli-sat values converted to USD using BTC price from `useBtcPrice`
+3. Insert `<PlatformStatsSection />` at the top of the `DashboardPage` return JSX, above `LargeTransactionsFeed`

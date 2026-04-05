@@ -414,6 +414,7 @@ export function formatUsdFromMsats(
   const sats = rawVal / 1_000;
   const btc = sats / SATS_PER_BTC;
   const usd = btc * btcUsd;
+  if (usd >= 1_000_000_000) return `$${(usd / 1_000_000_000).toFixed(2)}B`;
   if (usd >= 1_000_000) return `$${(usd / 1_000_000).toFixed(2)}M`;
   if (usd >= 1_000) return `$${(usd / 1_000).toFixed(2)}K`;
   if (usd >= 1) return `$${usd.toFixed(2)}`;
@@ -609,9 +610,34 @@ export function formatPriceDeltaPercent(
 ): string {
   if (delta === 0) return "0.00%";
   const previousPrice = currentPrice - delta;
-  if (previousPrice <= 0) return delta > 0 ? "+∞%" : "-100.00%";
+  if (previousPrice <= 0) return delta > 0 ? "+inf%" : "-100.00%";
   const pct = (delta / previousPrice) * 100;
   const abs = Math.abs(pct);
   const formatted = abs >= 100 ? abs.toFixed(1) : abs.toFixed(2);
   return delta > 0 ? `+${formatted}%` : `-${formatted}%`;
+}
+
+// ─── Platform Stats Dashboard ────────────────────────────────────────────────
+
+export interface OdinStatsDashboard {
+  bonded: number;
+  tokens: number;
+  total_users: number;
+  total_value_tokens: number;
+  total_volume_24h: number;
+  total_volume_all: number;
+  value_liquidity: number;
+  value_tokens: number;
+  trades_30d: { date: string; volume: number }[];
+  activities_30d: unknown[];
+}
+
+export async function getStatsDashboard(): Promise<OdinStatsDashboard | null> {
+  try {
+    const res = await fetch(`${BASE_URL}/statistics/dashboard`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
 }

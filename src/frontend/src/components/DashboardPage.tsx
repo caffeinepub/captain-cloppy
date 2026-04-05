@@ -4,12 +4,14 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Flame,
+  Globe,
   TrendingUp,
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBtcPrice } from "../hooks/useBtcPrice";
 import {
+  type OdinStatsDashboard,
   type OdinToken,
   type OdinTrade,
   SATS_PER_BTC,
@@ -17,6 +19,7 @@ import {
   formatMcapAsUsd,
   formatPriceAsSats,
   getGlobalTrades,
+  getStatsDashboard,
   getToken,
   getTokenImageUrl,
   getTokens,
@@ -68,6 +71,230 @@ function msatsToUsd(
   const sats = raw / 1_000;
   const btc = sats / SATS_PER_BTC;
   return btc * btcUsd;
+}
+
+/** Format a USD number for compact display */
+function formatUsd(usd: number): string {
+  if (usd >= 1_000_000_000) return `$${(usd / 1_000_000_000).toFixed(2)}B`;
+  if (usd >= 1_000_000) return `$${(usd / 1_000_000).toFixed(2)}M`;
+  if (usd >= 1_000) return `$${(usd / 1_000).toFixed(2)}K`;
+  if (usd >= 1) return `$${usd.toFixed(2)}`;
+  return `$${usd.toFixed(4)}`;
+}
+
+// ─── Platform Stats Section ──────────────────────────────────────────────────
+
+function PlatformStatsSection() {
+  const [stats, setStats] = useState<OdinStatsDashboard | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [hoveredBar, setHoveredBar] = useState<number | null>(null);
+  const { btcUsd } = useBtcPrice();
+
+  const fetchStats = useCallback(async (isInitial = false) => {
+    if (isInitial) setLoading(true);
+    const data = await getStatsDashboard();
+    setStats(data);
+    if (isInitial) setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchStats(true);
+    const interval = setInterval(() => fetchStats(false), 60_000);
+    return () => clearInterval(interval);
+  }, [fetchStats]);
+
+  // Bar chart calculations
+  const chartData = stats?.trades_30d ?? [];
+  const maxVolume = Math.max(...chartData.map((d) => d.volume), 1);
+
+  return (
+    <div
+      className="rounded-xl border border-border bg-card p-4 md:p-5"
+      data-ocid="dashboard.platform_stats.card"
+    >
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-4">
+        <Globe className="h-4 w-4 text-primary shrink-0" />
+        <h3 className="text-sm font-semibold text-foreground">
+          Platform Stats
+        </h3>
+        <div className="ml-auto flex items-center gap-1.5">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+          </span>
+          <span className="text-[10px] text-emerald-400 font-semibold">
+            Live
+          </span>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {["ps1", "ps2", "ps3", "ps4"].map((id) => (
+              <Skeleton key={id} className="h-16 rounded-lg" />
+            ))}
+          </div>
+          <Skeleton className="h-8 w-48 rounded" />
+          <Skeleton className="h-[80px] w-full rounded-lg" />
+        </div>
+      ) : !stats ? (
+        <div className="text-center py-6 text-xs text-muted-foreground/50">
+          Unable to load platform stats
+        </div>
+      ) : (
+        <>
+          {/* Stat Cards Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <div
+              className="bg-muted/20 rounded-lg p-3"
+              data-ocid="dashboard.platform_stats.panel"
+            >
+              <p className="text-[10px] text-muted-foreground mb-1">
+                Total Tokens
+              </p>
+              <p className="text-sm font-bold text-foreground">
+                {stats.tokens.toLocaleString()}
+              </p>
+            </div>
+            <div className="bg-muted/20 rounded-lg p-3">
+              <p className="text-[10px] text-muted-foreground mb-1">
+                Bonded Tokens
+              </p>
+              <p className="text-sm font-bold text-primary">
+                {stats.bonded.toLocaleString()}
+              </p>
+            </div>
+            <div className="bg-muted/20 rounded-lg p-3">
+              <p className="text-[10px] text-muted-foreground mb-1">
+                Total Users
+              </p>
+              <p className="text-sm font-bold text-foreground">
+                {stats.total_users.toLocaleString()}
+              </p>
+            </div>
+            <div className="bg-muted/20 rounded-lg p-3">
+              <p className="text-[10px] text-muted-foreground mb-1">
+                Total Liquidity
+              </p>
+              <p className="text-sm font-bold text-emerald-400">
+                {btcUsd
+                  ? formatUsd(msatsToUsd(stats.value_liquidity, btcUsd))
+                  : "—"}
+              </p>
+            </div>
+          </div>
+
+          {/* Inline volume stats */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mb-4">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground">
+                All-time Volume
+              </span>
+              <span className="text-xs font-bold text-foreground font-mono">
+                {btcUsd
+                  ? formatUsd(msatsToUsd(stats.total_volume_all, btcUsd))
+                  : "—"}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground">
+                24h Volume
+              </span>
+              <span className="text-xs font-bold text-primary font-mono">
+                {btcUsd
+                  ? formatUsd(msatsToUsd(stats.total_volume_24h, btcUsd))
+                  : "—"}
+              </span>
+            </div>
+          </div>
+
+          {/* 30-Day Volume Bar Chart */}
+          {chartData.length > 0 && (
+            <div>
+              <p className="text-[10px] text-muted-foreground mb-2">
+                30-Day Volume
+              </p>
+              <div className="relative">
+                {/* Bars */}
+                <div
+                  className="flex items-end gap-[2px] h-[80px] w-full"
+                  role="img"
+                  aria-label="30-day volume bar chart"
+                >
+                  {chartData.map((entry, i) => {
+                    const heightPct =
+                      maxVolume > 0 ? (entry.volume / maxVolume) * 100 : 0;
+                    const usdVal = btcUsd
+                      ? msatsToUsd(entry.volume, btcUsd)
+                      : 0;
+                    const isFirst = i === 0;
+                    const isLast = i === chartData.length - 1;
+                    const showLabel = isFirst || isLast || i % 7 === 0;
+                    const labelDate = entry.date
+                      ? new Date(entry.date).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })
+                      : "";
+
+                    return (
+                      <div
+                        key={entry.date ?? i}
+                        className="relative flex flex-col items-center justify-end flex-1 h-full group cursor-default"
+                        onMouseEnter={() => setHoveredBar(i)}
+                        onMouseLeave={() => setHoveredBar(null)}
+                      >
+                        {/* Tooltip */}
+                        {hoveredBar === i && (
+                          <div
+                            className={`absolute bottom-full mb-1.5 z-10 pointer-events-none ${
+                              i > chartData.length - 6
+                                ? "right-0"
+                                : i < 5
+                                  ? "left-0"
+                                  : "-translate-x-1/2 left-1/2"
+                            }`}
+                          >
+                            <div className="bg-popover border border-border rounded-md px-2 py-1 shadow-lg whitespace-nowrap">
+                              <p className="text-[10px] text-muted-foreground">
+                                {labelDate}
+                              </p>
+                              <p className="text-xs font-bold text-foreground">
+                                {btcUsd ? formatUsd(usdVal) : "—"}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Bar */}
+                        <div
+                          className={`w-full rounded-sm transition-colors duration-100 ${
+                            hoveredBar === i ? "bg-primary" : "bg-primary/50"
+                          }`}
+                          style={{ height: `${Math.max(heightPct, 2)}%` }}
+                        />
+
+                        {/* Date label (first, last, every 7th) */}
+                        {showLabel && (
+                          <span className="absolute -bottom-4 text-[8px] text-muted-foreground/60 whitespace-nowrap">
+                            {labelDate}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Bottom spacing for date labels */}
+                <div className="h-5" />
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
 
 // ─── Trending Token Card (visual) ───────────────────────────────────────────
@@ -614,7 +841,10 @@ export function DashboardPage({
 
   return (
     <div className="space-y-5 md:space-y-6">
-      {/* Large Transactions Feed — top of dashboard */}
+      {/* Platform Stats — topmost section */}
+      <PlatformStatsSection />
+
+      {/* Large Transactions Feed */}
       <LargeTransactionsFeed
         onTokenClick={handleTokenClick}
         onViewTraderProfile={onViewTraderProfile}

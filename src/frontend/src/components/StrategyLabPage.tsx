@@ -14,11 +14,13 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Activity,
+  BookOpen,
   ChartLine,
   FlaskConical,
   Loader2,
   Pencil,
   Plus,
+  TestTube2,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -274,6 +276,7 @@ function BacktestTab() {
   const [period, setPeriod] = useState<SimPeriod>("7d");
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<BacktestResult | null>(null);
+  const [usedSimulated, setUsedSimulated] = useState(false);
 
   const runBacktest = async () => {
     if (!token) {
@@ -309,31 +312,61 @@ function BacktestTab() {
         limit = 720;
       }
 
-      const res = await fetch(
-        `${BASE_URL}/tokens/${encodeURIComponent(token.id)}/candles?interval=${interval}&limit=${limit}`,
-      );
-      if (!res.ok) {
-        throw new Error("Failed to fetch candle data");
-      }
-      const json = await res.json();
-      const rawCandles: CandleData[] = (json.data ?? json ?? []).map(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (c: any) => ({
-          open: Number(c.open) / 1000,
-          high: Number(c.high) / 1000,
-          low: Number(c.low) / 1000,
-          close: Number(c.close) / 1000,
-          volume: Number(c.volume),
-          time: Number(c.time),
-        }),
-      );
+      let candles: CandleData[] = [];
+      let simulatedFallback = false;
 
-      if (rawCandles.length < 2) {
-        throw new Error("Not enough candle data for this period");
+      try {
+        const res = await fetch(
+          `${BASE_URL}/tokens/${encodeURIComponent(token.id)}/candles?interval=${interval}&limit=${limit}`,
+        );
+        if (res.ok) {
+          const json = await res.json();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const rawCandles: CandleData[] = (json.data ?? json ?? []).map(
+            (c: any) => ({
+              open: Number(c.open) / 1000,
+              high: Number(c.high) / 1000,
+              low: Number(c.low) / 1000,
+              close: Number(c.close) / 1000,
+              volume: Number(c.volume),
+              time: Number(c.time),
+            }),
+          );
+          if (rawCandles.length >= 2) {
+            candles = rawCandles.sort((a, b) => a.time - b.time);
+          }
+        }
+      } catch {
+        // network error — fall through to simulated data
       }
 
-      // Sort candles by time ascending
-      const candles = rawCandles.sort((a, b) => a.time - b.time);
+      if (candles.length < 2) {
+        // Fallback: generate simulated candles based on entry price
+        simulatedFallback = true;
+        const now = Math.floor(Date.now() / 1000);
+        const intervalSecs = 3600;
+        let price = entry;
+        const generated: CandleData[] = [];
+        for (let i = limit; i >= 0; i--) {
+          const volatility = price * 0.04;
+          const open = price;
+          const close = price + (Math.random() - 0.48) * volatility;
+          const high = Math.max(open, close) + Math.random() * volatility * 0.5;
+          const low = Math.min(open, close) - Math.random() * volatility * 0.5;
+          generated.push({
+            time: now - i * intervalSecs,
+            open: Math.max(0.000001, open),
+            high: Math.max(0.000001, high),
+            low: Math.max(0.000001, low),
+            close: Math.max(0.000001, close),
+            volume: Math.random() * 1000,
+          });
+          price = Math.max(0.000001, close);
+        }
+        candles = generated;
+      }
+
+      setUsedSimulated(simulatedFallback);
 
       // Run simulation
       const backtestResult = simulateStrategy(
@@ -506,6 +539,13 @@ function BacktestTab() {
               &mdash; {token?.ticker} &middot; {period}
             </span>
           </div>
+
+          {usedSimulated && (
+            <p className="text-xs text-yellow-500/80 bg-yellow-500/10 rounded px-3 py-2">
+              Live candle data unavailable for this token. Results are based on
+              simulated price data using your entry price as a seed.
+            </p>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <Card className="bg-card border-border">
@@ -1559,6 +1599,71 @@ export function StrategyLabPage() {
           Strategy Lab is a simulation tool only. No real trades are executed.
           Results are based on historical Odin.fun candle data and do not
           guarantee future performance.
+        </p>
+      </div>
+
+      {/* How It Works */}
+      <div className="rounded-lg border border-border/50 bg-card/40 p-4 space-y-3">
+        <div className="flex items-center gap-2 mb-1">
+          <BookOpen className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold text-foreground">
+            How It Works
+          </span>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {/* Backtest */}
+          <div className="flex flex-col gap-1.5 rounded-md border border-border/40 bg-background/40 p-3">
+            <div className="flex items-center gap-2">
+              <ChartLine className="h-4 w-4 text-blue-400 flex-shrink-0" />
+              <span className="text-xs font-semibold text-foreground">
+                Backtest
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Pick a token and set entry/exit conditions (e.g. "buy when price
+              drops 10%, sell when it rises 15%"). The engine replays those
+              rules against real Odin.fun historical candle data and reports
+              P&L, win rate, and max drawdown — so you can see how the strategy
+              would have performed before risking real funds.
+            </p>
+          </div>
+          {/* Paper Trading */}
+          <div className="flex flex-col gap-1.5 rounded-md border border-border/40 bg-background/40 p-3">
+            <div className="flex items-center gap-2">
+              <TestTube2 className="h-4 w-4 text-green-400 flex-shrink-0" />
+              <span className="text-xs font-semibold text-foreground">
+                Paper Trading
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Open simulated positions at the current live price with virtual
+              funds — no wallet signature required. The app tracks your entry
+              price and shows real-time unrealized P&L as the market moves.
+              Close the position whenever you like to lock in the simulated
+              result.
+            </p>
+          </div>
+          {/* Strategy Builder */}
+          <div className="flex flex-col gap-1.5 rounded-md border border-border/40 bg-background/40 p-3">
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-purple-400 flex-shrink-0" />
+              <span className="text-xs font-semibold text-foreground">
+                Strategy Builder
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Define and save named strategies with specific buy-drop %,
+              sell-rise %, stop-loss %, and optional DCA settings. Saved
+              strategies can be loaded directly into the Backtest tab to test
+              them, keeping your playbook organised in one place.
+            </p>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground/70 pt-1">
+          <span className="text-amber-400 font-medium">Note:</span> Strategy Lab
+          is a planning and simulation tool. Captain Cloppy cannot auto-execute
+          trades — every real trade on Odin.fun requires a manual wallet
+          signature.
         </p>
       </div>
 

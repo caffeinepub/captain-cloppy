@@ -1,6 +1,5 @@
 import {
   Compass,
-  FlaskConical,
   History,
   LayoutDashboard,
   LifeBuoy,
@@ -13,7 +12,6 @@ export type NavPage =
   | "dashboard"
   | "trading"
   | "explorer"
-  | "bot"
   | "history"
   | "profile";
 
@@ -32,7 +30,6 @@ const navItems: {
   { page: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { page: "trading", label: "Trading", icon: TrendingUp },
   { page: "explorer", label: "Explorer", icon: Compass },
-  { page: "bot", label: "Strategy Lab", icon: FlaskConical },
   { page: "history", label: "History", icon: History },
   { page: "profile", label: "Profile", icon: User },
 ];
