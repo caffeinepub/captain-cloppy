@@ -169,44 +169,44 @@ function calcSupplyPct(balance: number): string {
   return `${pct.toFixed(2)}%`;
 }
 
-/**
- * Build the owners URL, trying different sort param styles.
- * sortStyle 0 = sort=balance:desc, 1 = sort_by=balance&sort_order=desc, 2 = no sort
- */
-function buildOwnersUrl(
-  tokenId: string,
-  page: number,
-  sortStyle: number,
-): string {
-  const base = `https://api.odin.fun/v1/token/${encodeURIComponent(tokenId)}/owners?page=${page}&limit=${HOLDERS_PAGE_SIZE}`;
-  if (sortStyle === 0) return `${base}&sort=balance:desc`;
-  if (sortStyle === 1) return `${base}&sort_by=balance&sort_order=desc`;
-  return base;
-}
-
-/** Extract holders array and total count from a raw API response */
-function extractHolderResponse(json: any): {
+/** Extract holders array and total count from API response */
+function extractHolderResponse(json: unknown): {
   items: TokenHolder[];
   total: number;
 } {
-  let items: TokenHolder[] = [];
-  let total = 0;
+  if (!json || typeof json !== "object") return { items: [], total: 0 };
+  const j = json as Record<string, unknown>;
 
+  // Standard paginated format: { data: [...], count: N }
+  if (Array.isArray(j.data)) {
+    return {
+      items: j.data as TokenHolder[],
+      total:
+        typeof j.count === "number" ? j.count : (j.data as unknown[]).length,
+    };
+  }
+  // items key
+  if (Array.isArray(j.items)) {
+    return {
+      items: j.items as TokenHolder[],
+      total:
+        typeof j.count === "number" ? j.count : (j.items as unknown[]).length,
+    };
+  }
+  // holders key
+  if (Array.isArray(j.holders)) {
+    return {
+      items: j.holders as TokenHolder[],
+      total:
+        typeof j.count === "number" ? j.count : (j.holders as unknown[]).length,
+    };
+  }
+  // Raw array
   if (Array.isArray(json)) {
-    items = json as TokenHolder[];
-    total = json.length;
-  } else if (json && Array.isArray(json.data)) {
-    items = json.data as TokenHolder[];
-    total = typeof json.count === "number" ? json.count : json.data.length;
-  } else if (json && Array.isArray(json.items)) {
-    items = json.items as TokenHolder[];
-    total = typeof json.count === "number" ? json.count : json.items.length;
-  } else if (json && Array.isArray(json.holders)) {
-    items = json.holders as TokenHolder[];
-    total = typeof json.count === "number" ? json.count : json.holders.length;
+    return { items: json as TokenHolder[], total: (json as unknown[]).length };
   }
 
-  return { items, total };
+  return { items: [], total: 0 };
 }
 
 export function TokenDetailModal({
@@ -228,7 +228,7 @@ export function TokenDetailModal({
   // Holders state
   const [holders, setHolders] = useState<TokenHolder[]>([]);
   const [holdersLoading, setHoldersLoading] = useState(false);
-  const [holdersError, setHoldersError] = useState(false);
+  const [holdersError, setHoldersError] = useState<string | null>(null);
   const [holdersTotalCount, setHoldersTotalCount] = useState(0);
 
   const { btcUsd } = useBtcPrice();
@@ -275,7 +275,6 @@ export function TokenDetailModal({
             : [];
 
         const normalized: TokenTrade[] = raw.map((t: any) => {
-          // Aggressively extract BTC amount — try every possible field name
           const rawBtc =
             t.amount_btc ??
             t.btc_amount ??
@@ -283,7 +282,6 @@ export function TokenDetailModal({
             t.value ??
             t.btc_value ??
             0;
-          // Aggressively extract token amount
           const rawToken =
             t.amount_token ??
             t.token_amount ??
@@ -291,7 +289,6 @@ export function TokenDetailModal({
             t.qty ??
             t.token_qty ??
             0;
-          // Extract is_buy — handle string "buy"/"sell" variants too
           const isBuy =
             t.is_buy ??
             t.buy ??
@@ -302,9 +299,7 @@ export function TokenDetailModal({
                 ? false
                 : undefined) ??
             false;
-          // Extract timestamp
           const ts = t.created_at ?? t.time ?? t.timestamp ?? t.ts ?? 0;
-          // Extract username
           const username =
             t.user_username ?? t.username ?? t.user_name ?? t.user ?? "";
 
@@ -334,79 +329,87 @@ export function TokenDetailModal({
   }, []);
 
   /**
-   * Paginated holders fetch.
-   * - Tries sort=balance:desc first, falls back to sort_by/sort_order, then no sort.
-   * - Fetches page 1, reads total count, then fetches remaining pages sequentially.
-   * - On mid-pagination failure, shows whatever was collected so far.
-   * - Never shows the error state if we already have some data.
+   * Fetch holders using paginated API.
+   * Endpoint: GET /v1/token/{id}/owners?page=N&limit=100&sort=balance:desc
+   * Response format: { data: [...], count: N, page: N, limit: N }
    */
   const fetchHolders = useCallback(async (tokenId: string) => {
     setHoldersLoading(true);
-    setHoldersError(false);
+    setHoldersError(null);
+    setHolders([]);
+    setHoldersTotalCount(0);
 
-    // Try each sort style in order; stop as soon as page 1 succeeds
-    let sortStyle = 0;
-    let firstJson: any = null;
+    try {
+      // Fetch page 1
+      const url1 = `https://api.odin.fun/v1/token/${encodeURIComponent(tokenId)}/owners?page=1&limit=${HOLDERS_PAGE_SIZE}&sort=balance:desc`;
+      const res1 = await fetch(url1);
 
-    for (let s = 0; s <= 2; s++) {
-      try {
-        const url = buildOwnersUrl(tokenId, 1, s);
-        const res = await fetch(url);
-        if (!res.ok) continue;
-        const json = await res.json();
-        console.log(
-          `[Holders] page=1 sortStyle=${s} response:`,
-          JSON.stringify(json).slice(0, 500),
-        );
-        const { items } = extractHolderResponse(json);
-        if (items.length > 0 || s === 2) {
-          firstJson = json;
-          sortStyle = s;
-          break;
+      if (!res1.ok) {
+        // Try without sort param as fallback
+        const url1Fallback = `https://api.odin.fun/v1/token/${encodeURIComponent(tokenId)}/owners?page=1&limit=${HOLDERS_PAGE_SIZE}`;
+        const res1Fallback = await fetch(url1Fallback);
+        if (!res1Fallback.ok) {
+          setHoldersError(`API error: ${res1Fallback.status}`);
+          setHoldersLoading(false);
+          return;
         }
-      } catch {
-        // try next style
+        const json1Fallback = await res1Fallback.json();
+        const { items: firstItems, total: firstTotal } =
+          extractHolderResponse(json1Fallback);
+        setHoldersTotalCount(firstTotal);
+        if (firstItems.length === 0) {
+          setHolders([]);
+          setHoldersLoading(false);
+          return;
+        }
+        // Single page only (fallback)
+        setHolders(firstItems.slice(0, HOLDERS_MAX));
+        setHoldersLoading(false);
+        return;
       }
-    }
 
-    if (!firstJson) {
-      setHoldersError(true);
-      setHoldersLoading(false);
-      return;
-    }
+      const json1 = await res1.json();
+      const { items: page1Items, total } = extractHolderResponse(json1);
 
-    const { items: firstPage, total } = extractHolderResponse(firstJson);
-    const allHolders: TokenHolder[] = [...firstPage];
-    setHoldersTotalCount(total);
+      if (page1Items.length === 0) {
+        // No holders
+        setHolders([]);
+        setHoldersTotalCount(0);
+        setHoldersLoading(false);
+        return;
+      }
 
-    // Calculate how many additional pages we need
-    const totalToFetch = Math.min(total, HOLDERS_MAX);
-    const totalPages = Math.ceil(totalToFetch / HOLDERS_PAGE_SIZE);
+      setHoldersTotalCount(total);
+      const allHolders: TokenHolder[] = [...page1Items];
 
-    // Fetch remaining pages sequentially
-    if (totalPages > 1) {
-      for (let page = 2; page <= totalPages; page++) {
-        if (allHolders.length >= HOLDERS_MAX) break;
+      // Fetch remaining pages if needed
+      const totalToFetch = Math.min(total || page1Items.length, HOLDERS_MAX);
+      const totalPages = Math.ceil(totalToFetch / HOLDERS_PAGE_SIZE);
+
+      for (
+        let page = 2;
+        page <= totalPages && allHolders.length < HOLDERS_MAX;
+        page++
+      ) {
         try {
-          const url = buildOwnersUrl(tokenId, page, sortStyle);
+          const url = `https://api.odin.fun/v1/token/${encodeURIComponent(tokenId)}/owners?page=${page}&limit=${HOLDERS_PAGE_SIZE}&sort=balance:desc`;
           const res = await fetch(url);
-          if (!res.ok) break; // stop pagination but keep what we have
+          if (!res.ok) break;
           const json = await res.json();
           const { items } = extractHolderResponse(json);
-          if (items.length === 0) break; // no more data
+          if (items.length === 0) break;
           allHolders.push(...items);
         } catch {
-          break; // stop pagination gracefully
+          break;
         }
       }
-    }
 
-    // Trim to max and update state
-    const finalHolders = allHolders.slice(0, HOLDERS_MAX);
-    setHolders(finalHolders);
-    // If we didn't get total from API, use what we collected
-    if (!total) setHoldersTotalCount(finalHolders.length);
-    setHoldersLoading(false);
+      setHolders(allHolders.slice(0, HOLDERS_MAX));
+    } catch (_err) {
+      setHoldersError("Failed to load holders. Please try again.");
+    } finally {
+      setHoldersLoading(false);
+    }
   }, []);
 
   // Fetch token trades when feed tab is active + auto-refresh every 15s
@@ -821,7 +824,6 @@ export function TokenDetailModal({
                     >
                       {trades.map((trade, i) => {
                         const isBuy = trade.is_buy ?? trade.buy ?? false;
-                        // NaN-safe extraction with double fallback
                         const tokenAmt =
                           Number(
                             trade.amount_token ?? trade.token_amount ?? 0,
@@ -842,7 +844,6 @@ export function TokenDetailModal({
                           trade.user ??
                           "";
 
-                        // Send/receive direction detection
                         const hasReceiver = !!trade.receiver;
                         const hasSender = !!trade.sender;
                         const directionLabel = hasReceiver
@@ -961,9 +962,7 @@ export function TokenDetailModal({
                       className="flex flex-col items-center gap-3 py-8"
                       data-ocid="token_detail.error_state"
                     >
-                      <p className="text-sm text-destructive">
-                        Failed to load holders
-                      </p>
+                      <p className="text-sm text-destructive">{holdersError}</p>
                       <button
                         type="button"
                         onClick={() => token && fetchHolders(token.id)}
@@ -992,7 +991,6 @@ export function TokenDetailModal({
                             : holder.user_username
                           : abbreviatePrincipal(holder.user);
 
-                        // Gold/silver/bronze colors for top 3
                         const rankColor =
                           rank === 1
                             ? "text-yellow-400"
