@@ -323,7 +323,10 @@ function getHeatmapColor(count: number): string {
   return "bg-success/90";
 }
 
-function ActivityHeatmap({ trades }: { trades: OdinTrade[] }) {
+function ActivityHeatmap({
+  trades,
+  maxWeeks,
+}: { trades: OdinTrade[]; maxWeeks?: number }) {
   const heatmap = useMemo(() => buildHeatmapData(trades), [trades]);
 
   // Build 52 weeks of dates going back from today
@@ -362,13 +365,27 @@ function ActivityHeatmap({ trades }: { trades: OdinTrade[] }) {
   });
 
   const maxCount = Math.max(...Array.from(heatmap.values()), 1);
+  const displayWeeks = maxWeeks ? weeks.slice(-maxWeeks) : weeks;
+  // Recompute month labels for displayed weeks
+  const filteredMonthLabels: Array<{ label: string; colIndex: number }> = [];
+  let lastMonthFiltered = -1;
+  displayWeeks.forEach((week, i) => {
+    const m = week[0].date.getMonth();
+    if (m !== lastMonthFiltered) {
+      filteredMonthLabels.push({
+        label: week[0].date.toLocaleString("en-US", { month: "short" }),
+        colIndex: i,
+      });
+      lastMonthFiltered = m;
+    }
+  });
 
   return (
-    <div className="w-full overflow-x-auto">
-      <div className="min-w-max">
+    <div className="w-full">
+      <div className="min-w-0">
         {/* Month labels */}
         <div className="flex gap-0.5 mb-1 ml-7 relative h-4">
-          {monthLabels.map(({ label, colIndex }) => (
+          {filteredMonthLabels.map(({ label, colIndex }) => (
             <span
               key={`${label}-${colIndex}`}
               className="absolute text-[9px] text-muted-foreground"
@@ -393,8 +410,8 @@ function ActivityHeatmap({ trades }: { trades: OdinTrade[] }) {
             )}
           </div>
           {/* Grid */}
-          <div className="flex gap-0.5">
-            {weeks.map((week) => (
+          <div className="flex gap-0.5 flex-wrap">
+            {displayWeeks.map((week) => (
               <div key={week[0].key} className="flex flex-col gap-0.5">
                 {week.map(({ key, count, date }) => (
                   <div
@@ -541,7 +558,9 @@ function StatCard({
         </div>
       )}
       {subValue && !loading && (
-        <span className="text-[10px] text-muted-foreground">{subValue}</span>
+        <span className="text-[10px] text-muted-foreground truncate block">
+          {subValue}
+        </span>
       )}
     </div>
   );
@@ -800,7 +819,7 @@ export function ProfilePage({
   }
 
   return (
-    <div className="space-y-4 md:space-y-5 pb-4">
+    <div className="space-y-4 md:space-y-5 pb-4 w-full max-w-full overflow-x-hidden">
       {/* ── Back Button ───────────────────────────────────────────────────── */}
       {onBack && (
         <button
@@ -1250,10 +1269,12 @@ export function ProfilePage({
             </div>
           ) : (
             <>
-              <ActivityHeatmap trades={allTrades} />
-              <p className="text-[10px] text-muted-foreground text-center mt-1 sm:hidden">
-                scroll to see full heatmap
-              </p>
+              <div className="md:hidden">
+                <ActivityHeatmap trades={allTrades} maxWeeks={12} />
+              </div>
+              <div className="hidden md:block overflow-x-auto">
+                <ActivityHeatmap trades={allTrades} />
+              </div>
             </>
           )}
         </CardContent>
