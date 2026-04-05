@@ -72,6 +72,7 @@ interface ProfilePageProps {
   principal: string;
   onSelectToken?: (token: OdinToken) => void;
   onBack?: () => void;
+  onViewTraderProfile?: (principal: string) => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -585,6 +586,7 @@ export function ProfilePage({
   principal,
   onSelectToken,
   onBack,
+  onViewTraderProfile,
 }: ProfilePageProps) {
   const { btcUsd } = useBtcPrice();
 
@@ -594,6 +596,7 @@ export function ProfilePage({
   const [balances, setBalances] = useState<OdinBalance[]>([]);
   const [tokens, setTokens] = useState<OdinToken[]>([]);
   const [loading, setLoading] = useState(false);
+  const [tradesLoading, setTradesLoading] = useState(false);
   const [error, setError] = useState("");
 
   // Trade history tab pagination/filter
@@ -612,35 +615,59 @@ export function ProfilePage({
 
   const HISTORY_PAGE_SIZE = 20;
   const loadedRef = useRef("");
+  const bgCancelRef = useRef(false);
 
   // ── Fetch profile data ──────────────────────────────────────────────────────
   const fetchProfileData = useCallback(async (p: string) => {
     if (!p.trim()) return;
+    // Cancel any in-progress background trade fetch
+    bgCancelRef.current = true;
+
     setLoading(true);
+    setTradesLoading(false);
+    setAllTrades([]);
     setError("");
+
     try {
-      const [profileData, balanceData, tokenData, tradeData] =
-        await Promise.all([
-          getUserProfile(p),
-          getUserBalances(p).catch(() => [] as OdinBalance[]),
-          getTokens({ limit: 100, sort: "market_cap:desc" }).catch(() => ({
-            data: [] as OdinToken[],
-            count: 0,
-          })),
-          getUserTrades(p, 1, 500).catch(() => ({
-            data: [] as OdinTrade[],
-            count: 0,
-          })),
-        ]);
+      // Phase 1: fast parallel fetch — profile, balances, tokens (no trades yet)
+      const [profileData, balanceData, tokenData] = await Promise.all([
+        getUserProfile(p),
+        getUserBalances(p).catch(() => [] as OdinBalance[]),
+        getTokens({ limit: 100, sort: "market_cap:desc" }).catch(() => ({
+          data: [] as OdinToken[],
+          count: 0,
+        })),
+      ]);
 
       setProfile(profileData);
       setBalances(balanceData);
       setTokens(tokenData.data);
-      setAllTrades(tradeData.data);
+      setLoading(false);
+
+      // Phase 2: background progressive fetch of all trades
+      bgCancelRef.current = false;
+      setTradesLoading(true);
+      const PAGE_SIZE = 200;
+      let page = 1;
+      let accumulated: OdinTrade[] = [];
+      while (true) {
+        if (bgCancelRef.current) break;
+        try {
+          const result = await getUserTrades(p, page, PAGE_SIZE);
+          if (bgCancelRef.current) break;
+          accumulated = [...accumulated, ...result.data];
+          setAllTrades([...accumulated]);
+          if (result.data.length < PAGE_SIZE) break;
+          page++;
+        } catch {
+          break;
+        }
+      }
+      setTradesLoading(false);
     } catch {
       setError("Failed to load profile data.");
-    } finally {
       setLoading(false);
+      setTradesLoading(false);
     }
   }, []);
 
@@ -901,7 +928,7 @@ export function ProfilePage({
               </span>
               <span className="text-xs text-muted-foreground">
                 <span className="text-foreground font-semibold">
-                  {stats.totalTrades}
+                  {tradesLoading ? "..." : stats.totalTrades}
                 </span>{" "}
                 trades
               </span>
@@ -916,7 +943,7 @@ export function ProfilePage({
                 {formatUsd(btcToUsd(stats.totalVolumeBtc, btcUsd))}
               </span>
               <span className="text-[10px] text-muted-foreground">
-                {stats.totalTrades} trades
+                {tradesLoading ? "..." : stats.totalTrades} trades
               </span>
             </div>
           </div>
@@ -938,13 +965,13 @@ export function ProfilePage({
           label="Total Volume"
           value={formatUsd(btcToUsd(stats.totalVolumeBtc, btcUsd))}
           subValue={formatBtcCompact(stats.totalVolumeBtc)}
-          loading={loading}
+          loading={loading || tradesLoading}
         />
         <StatCard
           label="Total Trades"
           value={String(stats.totalTrades)}
           subValue={`${stats.totalBuys}B / ${stats.totalSells}S`}
-          loading={loading}
+          loading={loading || tradesLoading}
         />
         <StatCard
           label="Win Rate"
@@ -954,7 +981,7 @@ export function ProfilePage({
               : "—"
           }
           subValue="Buys vs total"
-          loading={loading}
+          loading={loading || tradesLoading}
         />
       </div>
 
@@ -971,57 +998,79 @@ export function ProfilePage({
               <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
                 Realized PnL
               </span>
-              <span
-                className={`text-base font-bold font-mono break-words ${
-                  pnl.realizedPnlBtc >= 0 ? "text-success" : "text-destructive"
-                }`}
-              >
-                {pnl.realizedPnlBtc >= 0 ? "+" : ""}
-                {formatBtcCompact(pnl.realizedPnlBtc)}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {pnl.realizedPnlBtc >= 0 ? "+" : ""}
-                {formatUsd(btcToUsd(pnl.realizedPnlBtc, btcUsd))}
-              </span>
+              {tradesLoading ? (
+                <div className="h-5 w-24 bg-muted rounded animate-pulse" />
+              ) : (
+                <span
+                  className={`text-base font-bold font-mono break-words ${
+                    pnl.realizedPnlBtc >= 0
+                      ? "text-success"
+                      : "text-destructive"
+                  }`}
+                >
+                  {pnl.realizedPnlBtc >= 0 ? "+" : ""}
+                  {formatBtcCompact(pnl.realizedPnlBtc)}
+                </span>
+              )}
+              {tradesLoading ? (
+                <div className="h-3 w-16 bg-muted rounded animate-pulse" />
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  {pnl.realizedPnlBtc >= 0 ? "+" : ""}
+                  {formatUsd(btcToUsd(pnl.realizedPnlBtc, btcUsd))}
+                </span>
+              )}
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
                 Unrealized PnL
               </span>
-              <span
-                className={`text-base font-bold font-mono break-words ${
-                  pnl.unrealizedPnlBtc >= 0
-                    ? "text-success"
-                    : "text-destructive"
-                }`}
-              >
-                {pnl.unrealizedPnlBtc >= 0 ? "+" : ""}
-                {formatBtcCompact(pnl.unrealizedPnlBtc)}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {pnl.unrealizedPnlBtc >= 0 ? "+" : ""}
-                {formatUsd(btcToUsd(pnl.unrealizedPnlBtc, btcUsd))}
-              </span>
+              {tradesLoading ? (
+                <div className="h-5 w-24 bg-muted rounded animate-pulse" />
+              ) : (
+                <span
+                  className={`text-base font-bold font-mono break-words ${
+                    pnl.unrealizedPnlBtc >= 0
+                      ? "text-success"
+                      : "text-destructive"
+                  }`}
+                >
+                  {pnl.unrealizedPnlBtc >= 0 ? "+" : ""}
+                  {formatBtcCompact(pnl.unrealizedPnlBtc)}
+                </span>
+              )}
+              {tradesLoading ? (
+                <div className="h-3 w-16 bg-muted rounded animate-pulse" />
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  {pnl.unrealizedPnlBtc >= 0 ? "+" : ""}
+                  {formatUsd(btcToUsd(pnl.unrealizedPnlBtc, btcUsd))}
+                </span>
+              )}
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
                 ROI
               </span>
-              <span
-                className={`text-base font-bold font-mono break-words ${
-                  pnl.roiPercent >= 0 ? "text-success" : "text-destructive"
-                }`}
-              >
-                {pnl.roiPercent >= 0 ? "+" : ""}
-                {pnl.roiPercent.toFixed(2)}%
-              </span>
+              {tradesLoading ? (
+                <div className="h-5 w-20 bg-muted rounded animate-pulse" />
+              ) : (
+                <span
+                  className={`text-base font-bold font-mono break-words ${
+                    pnl.roiPercent >= 0 ? "text-success" : "text-destructive"
+                  }`}
+                >
+                  {pnl.roiPercent >= 0 ? "+" : ""}
+                  {pnl.roiPercent.toFixed(2)}%
+                </span>
+              )}
               <span className="text-xs text-muted-foreground">
                 Based on realized trades
               </span>
             </div>
           </div>
           {/* Invested vs Returned bar */}
-          {pnl.totalInvestedBtc > 0 && (
+          {!tradesLoading && pnl.totalInvestedBtc > 0 && (
             <div className="mt-4 space-y-1.5">
               <div className="flex justify-between text-[10px] text-muted-foreground">
                 <span>Invested: {formatBtcCompact(pnl.totalInvestedBtc)}</span>
@@ -1040,6 +1089,12 @@ export function ProfilePage({
       </Card>
 
       {/* ── D. Trading Stats Grid ─────────────────────────────────────────── */}
+      {tradesLoading && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
+          <span className="inline-block h-2 w-2 rounded-full bg-primary/60 animate-pulse" />
+          Loading trade history & calculating stats...
+        </div>
+      )}
       <Card className="border-border bg-card shadow-card">
         <CardHeader className="px-5 py-3 border-b border-border">
           <CardTitle className="text-sm font-bold text-foreground">
@@ -1048,35 +1103,52 @@ export function ProfilePage({
         </CardHeader>
         <CardContent className="p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
-            <StatCard label="Total Buys" value={String(stats.totalBuys)} />
-            <StatCard label="Total Sells" value={String(stats.totalSells)} />
+            <StatCard
+              label="Total Buys"
+              value={String(stats.totalBuys)}
+              loading={tradesLoading}
+            />
+            <StatCard
+              label="Total Sells"
+              value={String(stats.totalSells)}
+              loading={tradesLoading}
+            />
             <StatCard
               label="Avg Trade Size"
               value={formatBtcCompact(stats.avgTradeSizeBtc)}
               subValue={formatUsd(btcToUsd(stats.avgTradeSizeBtc, btcUsd))}
+              loading={tradesLoading}
             />
-            <StatCard label="Most Traded" value={stats.mostTradedToken} />
+            <StatCard
+              label="Most Traded"
+              value={stats.mostTradedToken}
+              loading={tradesLoading}
+            />
             <StatCard
               label="Biggest Win"
               value={formatBtcCompact(stats.biggestWinBtc)}
               subValue={stats.biggestWinToken}
               trend="up"
+              loading={tradesLoading}
             />
             <StatCard
               label="Biggest Loss"
               value={formatBtcCompact(stats.biggestLossBtc)}
               subValue={stats.biggestLossToken}
               trend="down"
+              loading={tradesLoading}
             />
             <StatCard
               label="Total Invested"
               value={formatBtcCompact(pnl.totalInvestedBtc)}
               subValue={formatUsd(btcToUsd(pnl.totalInvestedBtc, btcUsd))}
+              loading={tradesLoading}
             />
             <StatCard
               label="Total Returned"
               value={formatBtcCompact(pnl.totalReturnedBtc)}
               subValue={formatUsd(btcToUsd(pnl.totalReturnedBtc, btcUsd))}
+              loading={tradesLoading}
             />
           </div>
         </CardContent>
@@ -1475,6 +1547,7 @@ export function ProfilePage({
           if (onSelectToken) onSelectToken(token);
         }}
         loading={detailLoading}
+        onViewTraderProfile={onViewTraderProfile}
       />
     </div>
   );

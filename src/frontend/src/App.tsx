@@ -177,7 +177,10 @@ export default function App() {
             />
           )}
           {page === "explorer" && (
-            <TokenExplorerPage onSelectToken={handleSelectToken} />
+            <TokenExplorerPage
+              onSelectToken={handleSelectToken}
+              onViewTraderProfile={handleViewTraderProfile}
+            />
           )}
           {page === "bot" && <BotPage />}
           {page === "history" && (
@@ -192,6 +195,7 @@ export default function App() {
             <ProfilePage
               principal={viewedTraderPrincipal || principal}
               onSelectToken={handleSelectToken}
+              onViewTraderProfile={handleViewTraderProfile}
               onBack={
                 viewedTraderPrincipal
                   ? () => {

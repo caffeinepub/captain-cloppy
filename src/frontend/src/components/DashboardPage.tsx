@@ -669,6 +669,7 @@ export function DashboardPage({
           setDetailOpen(false);
           if (onSelectToken) onSelectToken(token);
         }}
+        onViewTraderProfile={onViewTraderProfile}
       />
     </div>
   );

@@ -785,6 +785,7 @@ export function HistoryPage({
           if (onSelectToken) onSelectToken(token);
         }}
         loading={loadingDetail}
+        onViewTraderProfile={onViewTraderProfile}
       />
     </div>
   );

@@ -18,6 +18,7 @@ import { TokenDetailModal } from "./TokenDetailModal";
 
 interface TokenExplorerPageProps {
   onSelectToken: (token: OdinToken) => void;
+  onViewTraderProfile?: (principal: string) => void;
 }
 
 const SORT_OPTIONS: { label: string; value: string }[] = [
@@ -87,7 +88,10 @@ function TokenCardSkeleton() {
   );
 }
 
-export function TokenExplorerPage({ onSelectToken }: TokenExplorerPageProps) {
+export function TokenExplorerPage({
+  onSelectToken,
+  onViewTraderProfile,
+}: TokenExplorerPageProps) {
   const [tokens, setTokens] = useState<OdinToken[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -233,7 +237,7 @@ export function TokenExplorerPage({ onSelectToken }: TokenExplorerPageProps) {
           <div className="flex-1">
             <Input
               data-ocid="explorer.search_input"
-              placeholder="Search tokens…"
+              placeholder="Search tokens..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="h-9 bg-muted/40 border-border text-sm w-full"
@@ -436,6 +440,7 @@ export function TokenExplorerPage({ onSelectToken }: TokenExplorerPageProps) {
         token={detailToken}
         open={detailOpen}
         onOpenChange={setDetailOpen}
+        onViewTraderProfile={onViewTraderProfile}
         onTrade={(token) => {
           onSelectToken(token);
         }}

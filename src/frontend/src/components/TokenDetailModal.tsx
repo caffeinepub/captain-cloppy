@@ -43,6 +43,7 @@ interface TokenDetailModalProps {
   onOpenChange: (open: boolean) => void;
   onTrade: (token: OdinToken) => void;
   loading?: boolean;
+  onViewTraderProfile?: (principal: string) => void;
 }
 
 interface TokenTrade {
@@ -215,6 +216,7 @@ export function TokenDetailModal({
   onOpenChange,
   onTrade,
   loading = false,
+  onViewTraderProfile,
 }: TokenDetailModalProps) {
   const [activeTab, setActiveTab] = useState("chart");
   const [trades, setTrades] = useState<TokenTrade[]>([]);
@@ -883,9 +885,24 @@ export function TokenDetailModal({
                             {/* Row 2: username + direction + BTC+USD value */}
                             <div className="flex items-center justify-between mt-1">
                               <div className="flex items-center gap-1.5 min-w-0">
-                                <span className="text-muted-foreground/70">
-                                  {username ?? "—"}
-                                </span>
+                                {trade.user || username ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onViewTraderProfile?.(
+                                        trade.user || username,
+                                      )
+                                    }
+                                    className="text-muted-foreground/70 hover:text-primary hover:underline transition-colors cursor-pointer text-left"
+                                  >
+                                    {username ||
+                                      abbreviatePrincipal(trade.user)}
+                                  </button>
+                                ) : (
+                                  <span className="text-muted-foreground/70">
+                                    —
+                                  </span>
+                                )}
                                 {directionLabel && (
                                   <span className="text-[10px] text-sky-400/80 font-mono whitespace-nowrap">
                                     {directionLabel}
@@ -1018,8 +1035,12 @@ export function TokenDetailModal({
 
                             {/* User */}
                             <div className="col-span-6 flex items-center gap-2 min-w-0">
-                              <span
-                                className={`font-medium truncate ${
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onViewTraderProfile?.(holder.user)
+                                }
+                                className={`font-medium truncate hover:underline hover:text-primary transition-colors cursor-pointer text-left ${
                                   rank === 1
                                     ? "text-yellow-400"
                                     : rank === 2
@@ -1030,7 +1051,7 @@ export function TokenDetailModal({
                                 }`}
                               >
                                 {displayName}
-                              </span>
+                              </button>
                             </div>
 
                             {/* Balance */}
