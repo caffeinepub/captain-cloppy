@@ -389,7 +389,7 @@ function GlobalFeedMini({
 
   const fetchFeed = useCallback((isInitial = false) => {
     if (isInitial) setLoading(true);
-    getGlobalTrades(1, 8)
+    getGlobalTrades(1, 5)
       .then(({ data }) => {
         setTrades(data);
         setLastRefreshed(new Date());
@@ -461,7 +461,7 @@ function GlobalFeedMini({
           ? FEED_SKELETON_IDS.map((id) => (
               <Skeleton key={id} className="h-12 w-full rounded-lg" />
             ))
-          : trades.slice(0, 8).map((trade, i) => {
+          : trades.slice(0, 5).map((trade, i) => {
               const isBuy = trade.buy ?? false;
               const ticker = trade.token_ticker ?? trade.token_id ?? "—";
               const timestamp = trade.time ?? 0;

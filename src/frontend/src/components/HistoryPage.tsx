@@ -151,7 +151,7 @@ export function HistoryPage({
     fetchGlobalTrades(globalPage);
   }, [globalPage, fetchGlobalTrades]);
 
-  // Auto-refresh Mini Global Feed every 15 seconds
+  // Auto-refresh Global Feed every 15 seconds
   useEffect(() => {
     if (!liveActive) {
       if (liveIntervalRef.current) {
@@ -240,7 +240,7 @@ export function HistoryPage({
               value="global"
               className="flex-1 sm:flex-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs"
             >
-              Mini Global Feed
+              Global Feed
             </TabsTrigger>
           </TabsList>
 
@@ -549,7 +549,7 @@ export function HistoryPage({
           )}
         </TabsContent>
 
-        {/* Mini Global Feed */}
+        {/* Global Feed */}
         <TabsContent
           value="global"
           className="rounded-xl border border-border bg-card shadow-card overflow-hidden"
