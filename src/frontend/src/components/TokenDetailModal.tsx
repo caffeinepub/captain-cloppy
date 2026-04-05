@@ -48,13 +48,21 @@ interface TokenTrade {
   token: string;
   created_at?: string | number;
   time?: string | number;
+  timestamp?: string | number;
+  ts?: string | number;
   is_buy?: boolean;
   buy?: boolean;
+  type?: string;
+  trade_type?: string;
   token_amount?: number;
   amount_token?: number;
   btc_amount?: number;
   amount_btc?: number;
   user_username?: string;
+  username?: string;
+  user_name?: string;
+  receiver?: string;
+  sender?: string;
 }
 
 function TokenInitials({ ticker }: { ticker: string }) {
@@ -102,6 +110,12 @@ function formatTokenAmt(raw: number | undefined | null): string {
   if (amount >= 1_000) return `${(amount / 1_000).toFixed(2)}K`;
   if (amount < 1 && amount > 0) return amount.toFixed(4);
   return amount.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+/** Abbreviate a principal/address: first 6 chars + … + last 4 chars */
+function abbreviatePrincipal(p: string): string {
+  if (!p || p.length <= 12) return p;
+  return `${p.slice(0, 6)}…${p.slice(-4)}`;
 }
 
 /** Normalize a URL: add https:// if missing */
@@ -180,16 +194,62 @@ export function TokenDetailModal({
         return r.json();
       })
       .then((json) => {
-        const raw = json.data ?? [];
-        // Normalize all possible field name variants from the Odin API
-        const normalized: TokenTrade[] = raw.map((t: any) => ({
-          ...t,
-          amount_btc: t.amount_btc ?? t.btc_amount ?? t.btc ?? 0,
-          amount_token: t.amount_token ?? t.token_amount ?? t.token_amt ?? 0,
-          is_buy: t.is_buy ?? t.buy ?? false,
-          created_at: t.created_at ?? t.time ?? t.timestamp ?? 0,
-          user_username: t.user_username ?? t.user ?? "",
-        }));
+        const raw: any[] = Array.isArray(json.data)
+          ? json.data
+          : Array.isArray(json)
+            ? json
+            : [];
+
+        const normalized: TokenTrade[] = raw.map((t: any) => {
+          // Aggressively extract BTC amount — try every possible field name
+          const rawBtc =
+            t.amount_btc ??
+            t.btc_amount ??
+            t.btc ??
+            t.value ??
+            t.btc_value ??
+            0;
+          // Aggressively extract token amount
+          const rawToken =
+            t.amount_token ??
+            t.token_amount ??
+            t.token_amt ??
+            t.qty ??
+            t.token_qty ??
+            0;
+          // Extract is_buy — handle string "buy"/"sell" variants too
+          const isBuy =
+            t.is_buy ??
+            t.buy ??
+            (t.type === "buy" ? true : t.type === "sell" ? false : undefined) ??
+            (t.trade_type === "buy"
+              ? true
+              : t.trade_type === "sell"
+                ? false
+                : undefined) ??
+            false;
+          // Extract timestamp
+          const ts = t.created_at ?? t.time ?? t.timestamp ?? t.ts ?? 0;
+          // Extract username
+          const username =
+            t.user_username ?? t.username ?? t.user_name ?? t.user ?? "";
+
+          return {
+            ...t,
+            amount_btc:
+              typeof rawBtc === "string"
+                ? Number.parseFloat(rawBtc) || 0
+                : Number(rawBtc) || 0,
+            amount_token:
+              typeof rawToken === "string"
+                ? Number.parseFloat(rawToken) || 0
+                : Number(rawToken) || 0,
+            is_buy: isBuy,
+            created_at: ts,
+            user_username: username,
+          };
+        });
+
         setTrades(normalized);
         setLastRefreshed(new Date());
       })
@@ -558,7 +618,7 @@ export function TokenDetailModal({
                       data-ocid="token_detail.loading_state"
                     >
                       {[1, 2, 3, 4, 5].map((k) => (
-                        <Skeleton key={k} className="h-14 w-full rounded-lg" />
+                        <Skeleton key={k} className="h-16 w-full rounded-lg" />
                       ))}
                     </div>
                   ) : tradesError ? (
@@ -582,13 +642,35 @@ export function TokenDetailModal({
                     >
                       {trades.map((trade, i) => {
                         const isBuy = trade.is_buy ?? trade.buy ?? false;
+                        // NaN-safe extraction with double fallback
                         const tokenAmt =
-                          trade.amount_token ?? trade.token_amount ?? 0;
+                          Number(
+                            trade.amount_token ?? trade.token_amount ?? 0,
+                          ) || 0;
                         const btcAmt =
-                          trade.amount_btc ?? trade.btc_amount ?? 0;
-                        const timestamp = trade.created_at ?? trade.time ?? 0;
+                          Number(trade.amount_btc ?? trade.btc_amount ?? 0) ||
+                          0;
+                        const timestamp =
+                          trade.created_at ??
+                          trade.time ??
+                          trade.timestamp ??
+                          trade.ts ??
+                          0;
                         const username =
-                          trade.user_username ?? trade.user ?? "";
+                          trade.user_username ??
+                          trade.username ??
+                          trade.user_name ??
+                          trade.user ??
+                          "";
+
+                        // Send/receive direction detection
+                        const hasReceiver = !!trade.receiver;
+                        const hasSender = !!trade.sender;
+                        const directionLabel = hasReceiver
+                          ? `→ ${abbreviatePrincipal(trade.receiver!)}`
+                          : hasSender
+                            ? `← ${abbreviatePrincipal(trade.sender!)}`
+                            : null;
 
                         return (
                           <div
@@ -596,6 +678,7 @@ export function TokenDetailModal({
                             className="rounded-lg bg-muted/30 border border-border px-3 py-2 text-xs"
                             data-ocid={`token_detail.item.${i + 1}`}
                           >
+                            {/* Row 1: badge + token amount + time */}
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <Badge
@@ -619,16 +702,25 @@ export function TokenDetailModal({
                                 {formatRelativeTime(timestamp)}
                               </span>
                             </div>
+
+                            {/* Row 2: username + direction + BTC+USD value */}
                             <div className="flex items-center justify-between mt-1">
-                              <span className="text-muted-foreground/70 truncate max-w-[120px]">
-                                {username
-                                  ? username.length > 16
-                                    ? `${username.slice(0, 8)}…${username.slice(-4)}`
-                                    : username
-                                  : "—"}
-                              </span>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-muted-foreground/70 truncate max-w-[100px]">
+                                  {username
+                                    ? username.length > 14
+                                      ? `${username.slice(0, 8)}…${username.slice(-4)}`
+                                      : username
+                                    : "—"}
+                                </span>
+                                {directionLabel && (
+                                  <span className="text-[10px] text-sky-400/80 font-mono whitespace-nowrap">
+                                    {directionLabel}
+                                  </span>
+                                )}
+                              </div>
                               <span
-                                className={`font-mono font-semibold ${
+                                className={`font-mono font-semibold shrink-0 ${
                                   isBuy ? "text-emerald-400" : "text-red-400"
                                 }`}
                               >

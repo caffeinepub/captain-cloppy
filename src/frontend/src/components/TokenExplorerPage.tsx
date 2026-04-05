@@ -10,7 +10,7 @@ import {
   type OdinTokensParams,
   formatMcapAsUsd,
   formatPriceAsSats,
-  formatPriceDelta,
+  formatPriceDeltaPercent,
   getTokenImageUrl,
   getTokens,
 } from "../lib/odinApi";
@@ -324,7 +324,7 @@ export function TokenExplorerPage({ onSelectToken }: TokenExplorerPageProps) {
                           : "text-muted-foreground",
                     ].join(" ")}
                   >
-                    {formatPriceDelta(token.price_1d)}
+                    {formatPriceDeltaPercent(token.price_1d, token.price)}
                   </span>
                 </div>
               )}

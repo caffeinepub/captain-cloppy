@@ -597,3 +597,19 @@ export function getTokenImageUrl(tokenId?: string): string | undefined {
   if (!tokenId) return undefined;
   return `https://api.odin.fun/v1/token/${tokenId}/image`;
 }
+
+/** Format price delta as percentage for display.
+ * price_1d is the delta in milli-sats, currentPrice is the current price in milli-sats.
+ * Calculates: (price_1d / (currentPrice - price_1d)) * 100 */
+export function formatPriceDeltaPercent(
+  delta: number,
+  currentPrice: number,
+): string {
+  if (delta === 0) return "0.00%";
+  const previousPrice = currentPrice - delta;
+  if (previousPrice <= 0) return delta > 0 ? "+∞%" : "-100.00%";
+  const pct = (delta / previousPrice) * 100;
+  const abs = Math.abs(pct);
+  const formatted = abs >= 100 ? abs.toFixed(1) : abs.toFixed(2);
+  return delta > 0 ? `+${formatted}%` : `-${formatted}%`;
+}
