@@ -281,7 +281,7 @@ export function HistoryPage({
           </div>
         </div>
 
-        {/* User Trades */}
+        {/* User Trades - Mobile-friendly card layout */}
         <TabsContent
           value="odin"
           className="rounded-xl border border-border bg-card shadow-card overflow-hidden"
@@ -322,83 +322,97 @@ export function HistoryPage({
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <Table data-ocid="history.odin.table" className="min-w-[600px]">
-                  <TableHeader>
-                    <TableRow className="border-border hover:bg-transparent">
-                      <TableHead className="text-muted-foreground text-xs font-semibold uppercase">
-                        Date/Time
-                      </TableHead>
-                      <TableHead className="text-muted-foreground text-xs font-semibold uppercase">
-                        Token
-                      </TableHead>
-                      <TableHead className="text-muted-foreground text-xs font-semibold uppercase">
-                        Type
-                      </TableHead>
-                      <TableHead className="text-muted-foreground text-xs font-semibold uppercase text-right">
-                        BTC (USD)
-                      </TableHead>
-                      <TableHead className="text-muted-foreground text-xs font-semibold uppercase text-right">
-                        Token Amt
-                      </TableHead>
-                      <TableHead className="text-muted-foreground text-xs font-semibold uppercase text-right">
-                        Price
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredOdin.map((t, i) => (
-                      <TableRow
-                        key={t.id}
-                        data-ocid={`history.odin.row.${i + 1}`}
-                        className="border-border hover:bg-muted/30"
-                      >
-                        <TableCell className="text-xs text-muted-foreground font-mono">
-                          {formatDate(t.time)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1.5">
+              {/* Mobile-friendly card list */}
+              <div
+                className="divide-y divide-border"
+                data-ocid="history.odin.list"
+              >
+                {filteredOdin.map((t, i) => {
+                  const ticker =
+                    t.token_ticker ??
+                    (t.token_id ? t.token_id.slice(0, 8) : t.token);
+                  return (
+                    <div
+                      key={t.id}
+                      data-ocid={`history.odin.item.${i + 1}`}
+                      className="px-4 py-3 hover:bg-muted/20 transition-colors active:bg-muted/30"
+                    >
+                      {/* Row 1: Token logo + ticker + bonded + BUY/SELL */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {t.token_id && (
+                            <img
+                              src={`https://api.odin.fun/v1/token/${t.token_id}/image`}
+                              alt={ticker}
+                              width={28}
+                              height={28}
+                              className="rounded-full shrink-0 object-cover bg-muted w-7 h-7"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display =
+                                  "none";
+                              }}
+                            />
+                          )}
+                          <div className="flex items-center gap-1 min-w-0">
                             <TokenCell
                               tokenId={t.token_id}
-                              tokenTicker={
-                                t.token_ticker ??
-                                (t.token_id ? t.token_id.slice(0, 8) : t.token)
-                              }
+                              tokenTicker={ticker}
                               onOpenDetail={handleOpenTokenDetail}
                             />
                             {t.bonded && <BondedCheck />}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            {t.buy ? (
-                              <ArrowDownLeft className="h-3.5 w-3.5 text-success" />
-                            ) : (
-                              <ArrowUpRight className="h-3.5 w-3.5 text-destructive" />
-                            )}
-                            <span
-                              className={`text-[11px] font-semibold ${t.buy ? "text-success" : "text-destructive"}`}
-                            >
-                              {t.buy ? "BUY" : "SELL"}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="font-mono text-xs text-foreground">
-                            {formatBtcWithUsd(t.amount_btc, btcUsd)}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs text-foreground">
-                          {formatTokenAmount(t.amount_token)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs text-primary">
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {t.buy ? (
+                            <ArrowDownLeft className="h-3.5 w-3.5 text-success" />
+                          ) : (
+                            <ArrowUpRight className="h-3.5 w-3.5 text-destructive" />
+                          )}
+                          <span
+                            className={`text-[11px] font-bold ${
+                              t.buy ? "text-success" : "text-destructive"
+                            }`}
+                          >
+                            {t.buy ? "BUY" : "SELL"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Row 2: Date/time + relative time */}
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(t.time)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/60 shrink-0 ml-2">
+                          {formatRelativeTime(t.time)}
+                        </span>
+                      </div>
+
+                      {/* Row 3: BTC + USD value */}
+                      <div className="mt-1">
+                        <span className="font-mono text-xs text-foreground">
+                          {formatBtcWithUsd(t.amount_btc, btcUsd)}
+                        </span>
+                      </div>
+
+                      {/* Row 4: Token amount + price in sats */}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-muted-foreground">
+                          Amt: {formatTokenAmount(t.amount_token)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/50">
+                          .
+                        </span>
+                        <span className="text-[10px] text-primary font-mono">
                           {formatPriceAsSats(t.price)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+
+              {/* Pagination */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between px-4 md:px-5 py-4 border-t border-border">
                   <span className="text-xs text-muted-foreground">
@@ -705,7 +719,7 @@ export function HistoryPage({
                           Amt: {formatTokenAmount(t.amount_token)}
                         </span>
                         <span className="text-[10px] text-muted-foreground/50">
-                          ·
+                          .
                         </span>
                         <span className="text-[10px] text-primary font-mono">
                           {formatPriceAsSats(t.price)}
