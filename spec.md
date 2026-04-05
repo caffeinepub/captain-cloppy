@@ -1,48 +1,38 @@
-# Captain Cloppy - Profile Page
+# Captain Cloppy
 
 ## Current State
-- App has: Dashboard, Trading, Explorer, Bot, History pages
-- NavPage type = "dashboard" | "trading" | "explorer" | "bot" | "history"
-- No Profile/Wallet detail page exists
-- odinApi.ts has: getUserTrades, getUserBalances, getTokens, formatBtcWithUsd, formatMcapAsUsd, formatTokenAmount, etc.
-- BTC price fetched via fetchBtcUsd() and useBtcPrice hook
-- Auth: useSiwbAuth returns principal (string | null)
+Profile page (`ProfilePage.tsx`) has multiple mobile layout issues:
+- `StatCard` component spans have no overflow protection — `font-mono` BTC values overflow grid cells
+- `grid-cols-2 md:grid-cols-4` in Financial Summary and Trading Stats Grid causes content overflow on narrow screens
+- `break-all` on BTC monospace values splits numbers mid-digit
+- Activity Heatmap has no scroll affordance
+- Portfolio mobile cards have `shrink-0` on value column without overflow guard
+- Identity Header principal ID uses `max-w-[160px]` fixed width
 
 ## Requested Changes (Diff)
 
 ### Add
-- New page: `ProfilePage` component (`src/frontend/src/components/ProfilePage.tsx`)
-- New nav item: "Profile" (User icon) in Sidebar and bottom nav
-- NavPage type extended to include "profile"
-- Sections in ProfilePage:
-  1. **Identity Header** — avatar (initials), username, principal ID (truncated, copyable), Member Since (first trade date)
-  2. **Financial Overview** — Total Balance (BTC + USD), Total Portfolio Value of all token holdings
-  3. **PnL Stats** — Realized PnL (from sells), Unrealized PnL (current holdings vs avg buy price), ROI %, Win Rate %
-  4. **Trading Stats Cards** — Total Trades, Buys vs Sells count, Average Trade Size, Most Traded Token, Biggest Win, Biggest Loss
-  5. **Portfolio Breakdown** — Donut/pie chart of token holdings (using recharts/chart.tsx), + table with rank, token logo, ticker, balance, % of portfolio
-  6. **Top Holdings** — Top 5 tokens by value (BTC + USD)
-  7. **Activity Heatmap** — GitHub-style contribution heatmap (last 52 weeks of trading activity by day)
-  8. **Trade History** — Paginated list of personal trades (reuse card layout from HistoryPage), with filter by buy/sell and token search
-  9. **Volume Stats** — Total volume traded (BTC + USD), all time
-  10. **Leaderboard Rank** — Estimated rank by total volume among all Odin traders (fetched from global trades)
-- Profile page is accessible from sidebar and bottom nav
-- If no wallet connected: show "Wallet connect coming soon" placeholder
-- All data fetched from Odin.fun REST API using existing principal from useSiwbAuth
+- `min-w-0` to all grid children to prevent overflow blowout
+- Scroll affordance hint on Activity Heatmap
+- `overflow-hidden` / `truncate` guards where needed
 
 ### Modify
-- `App.tsx` — add `profile` to NavPage type, add ProfilePage component, add to page routing and PAGE_TITLES
-- `Sidebar.tsx` — add Profile nav item (User icon)
-- Bottom nav in `App.tsx` — add Profile nav item
+- `StatCard` inner value `<span>`: add `truncate` + `max-w-full` + `overflow-hidden` so long BTC strings don't bleed outside card
+- Financial Summary grid: change to `grid-cols-1 sm:grid-cols-2 md:grid-cols-4` so on very small phones each card gets full width
+- Trading Stats Grid: same responsive grid adjustment
+- PnL section values: replace `break-all` with `break-words` (cleaner mid-word breaks)
+- Portfolio mobile card right-side value column: add `max-w-[120px]` guard so left side doesn't collapse
+- Identity Header principal `max-w-[160px]`: remove fixed pixel cap, use `min-w-0 flex-1` instead
+- Activity Heatmap wrapper: add `text-xs text-muted-foreground` scroll hint below on mobile
 
 ### Remove
-- Nothing removed
+- `break-all` class from PnL BTC value spans (replaced with `break-words`)
 
 ## Implementation Plan
-1. Create `ProfilePage.tsx` with all sections listed above
-2. Add API helper in odinApi.ts: `getUserProfile(principal)` to fetch user detail (username, created_time) from `/user/{principal}` endpoint
-3. Update NavPage type in Sidebar.tsx
-4. Update App.tsx routing, PAGE_TITLES, BOTTOM_NAV_ITEMS, and render ProfilePage
-5. Wire up: principal from useSiwbAuth, btcUsd from useBtcPrice, trades/balances from odinApi
-6. PnL calculation: group trades by token, match buys to sells FIFO, compute realized PnL; unrealized = (current price - avg buy price) * held amount
-7. Activity heatmap: build from trade timestamps over last 52 weeks
-8. Portfolio donut chart: use existing recharts via chart.tsx
+1. Fix `StatCard` component to add `truncate overflow-hidden max-w-full` to value span and `min-w-0` to outer div
+2. Update Financial Summary grid to `grid-cols-1 sm:grid-cols-2 md:grid-cols-4`
+3. Update Trading Stats Grid to `grid-cols-1 sm:grid-cols-2 md:grid-cols-4`
+4. Replace `break-all` with `break-words` in PnL section
+5. Fix Identity Header principal ID display — remove `max-w-[160px]`, use `min-w-0 flex-1 break-all`
+6. Fix Portfolio mobile card right-side column with max-width guard
+7. Add scroll affordance text below Activity Heatmap on mobile

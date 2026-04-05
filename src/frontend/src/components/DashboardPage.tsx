@@ -28,10 +28,16 @@ interface DashboardPageProps {
   principal: string;
   onSetPrincipal: (p: string) => void;
   onSelectToken?: (token: OdinToken) => void;
+  onViewTraderProfile?: (principal: string) => void;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+function truncatePrincipal(p?: string): string {
+  if (!p) return "u2014";
+  if (p.length <= 12) return p;
+  return `${p.slice(0, 6)}...${p.slice(-4)}`;
+}
 function formatRelativeTime(raw: string | number | undefined): string {
   if (raw === undefined || raw === null) return "—";
   try {
@@ -174,8 +180,10 @@ const LARGE_TX_SKELETON_IDS = ["lt1", "lt2", "lt3"] as const;
 
 function LargeTransactionsFeed({
   onTokenClick,
+  onViewTraderProfile,
 }: {
   onTokenClick?: (token: OdinToken) => void;
+  onViewTraderProfile?: (principal: string) => void;
 }) {
   const [largeTrades, setLargeTrades] = useState<OdinTrade[]>([]);
   const [loading, setLoading] = useState(true);
@@ -299,13 +307,23 @@ function LargeTransactionsFeed({
                 </span>
 
                 <div className="flex flex-col items-end shrink-0">
-                  <span className="text-[9px] text-muted-foreground/70 font-mono">
-                    {trade.user_username
-                      ? trade.user_username
-                      : trade.user
-                        ? trade.user
-                        : "—"}
-                  </span>
+                  {trade.user || trade.user_username ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onViewTraderProfile?.(
+                          trade.user || trade.user_username || "",
+                        )
+                      }
+                      className="text-[9px] text-muted-foreground/70 font-mono hover:text-primary hover:underline transition-colors cursor-pointer"
+                    >
+                      {trade.user_username || truncatePrincipal(trade.user)}
+                    </button>
+                  ) : (
+                    <span className="text-[9px] text-muted-foreground/70 font-mono">
+                      —
+                    </span>
+                  )}
                   <span className="text-[9px] text-muted-foreground/50">
                     {formatRelativeTime(timestamp)}
                   </span>
@@ -325,8 +343,10 @@ const FEED_SKELETON_IDS = ["f1", "f2", "f3", "f4", "f5"] as const;
 
 function GlobalFeedMini({
   onTokenClick,
+  onViewTraderProfile,
 }: {
   onTokenClick?: (token: OdinToken) => void;
+  onViewTraderProfile?: (principal: string) => void;
 }) {
   const [trades, setTrades] = useState<OdinTrade[]>([]);
   const [loading, setLoading] = useState(true);
@@ -456,13 +476,23 @@ function GlobalFeedMini({
                   </span>
 
                   <div className="flex flex-col items-end shrink-0">
-                    <span className="text-[9px] text-muted-foreground/70 font-mono">
-                      {trade.user_username
-                        ? trade.user_username
-                        : trade.user
-                          ? trade.user
-                          : "—"}
-                    </span>
+                    {trade.user || trade.user_username ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onViewTraderProfile?.(
+                            trade.user || trade.user_username || "",
+                          )
+                        }
+                        className="text-[9px] text-muted-foreground/70 font-mono hover:text-primary hover:underline transition-colors cursor-pointer"
+                      >
+                        {trade.user_username || truncatePrincipal(trade.user)}
+                      </button>
+                    ) : (
+                      <span className="text-[9px] text-muted-foreground/70 font-mono">
+                        —
+                      </span>
+                    )}
                     <span className="text-[9px] text-muted-foreground/50">
                       {formatRelativeTime(timestamp)}
                     </span>
@@ -499,6 +529,7 @@ export function DashboardPage({
   principal: _principal,
   onSetPrincipal: _onSetPrincipal,
   onSelectToken,
+  onViewTraderProfile,
 }: DashboardPageProps) {
   const [trendingTokens, setTrendingTokens] = useState<OdinToken[]>([]);
   const [loadingTrending, setLoadingTrending] = useState(false);
@@ -584,7 +615,10 @@ export function DashboardPage({
   return (
     <div className="space-y-5 md:space-y-6">
       {/* Large Transactions Feed — top of dashboard */}
-      <LargeTransactionsFeed onTokenClick={handleTokenClick} />
+      <LargeTransactionsFeed
+        onTokenClick={handleTokenClick}
+        onViewTraderProfile={onViewTraderProfile}
+      />
 
       {/* Hot Tokens — visual card grid */}
       <div className="rounded-xl border border-border bg-card p-4 md:p-5 shadow-card">
@@ -621,7 +655,10 @@ export function DashboardPage({
       </div>
 
       {/* Mini Global Feed */}
-      <GlobalFeedMini onTokenClick={handleTokenClick} />
+      <GlobalFeedMini
+        onTokenClick={handleTokenClick}
+        onViewTraderProfile={onViewTraderProfile}
+      />
 
       {/* Token Detail Modal */}
       <TokenDetailModal

@@ -71,6 +71,7 @@ interface TradeStats {
 interface ProfilePageProps {
   principal: string;
   onSelectToken?: (token: OdinToken) => void;
+  onBack?: () => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -363,50 +364,52 @@ function ActivityHeatmap({ trades }: { trades: OdinTrade[] }) {
   const maxCount = Math.max(...Array.from(heatmap.values()), 1);
 
   return (
-    <div className="overflow-x-auto">
-      {/* Month labels */}
-      <div className="flex gap-0.5 mb-1 ml-7 relative h-4">
-        {monthLabels.map(({ label, colIndex }) => (
-          <span
-            key={`${label}-${colIndex}`}
-            className="absolute text-[9px] text-muted-foreground"
-            style={{ left: `${colIndex * 11}px` }}
-          >
-            {label}
-          </span>
-        ))}
-      </div>
-      <div className="flex gap-0.5">
-        {/* Day labels */}
-        <div className="flex flex-col gap-0.5 mr-1">
-          {(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const).map(
-            (d, i) => (
-              <span
-                key={d}
-                className="text-[9px] text-muted-foreground w-5 h-2.5 flex items-center justify-center"
-              >
-                {i % 2 === 1 ? d[0] : ""}
-              </span>
-            ),
-          )}
-        </div>
-        {/* Grid */}
-        <div className="flex gap-0.5">
-          {weeks.map((week) => (
-            <div key={week[0].key} className="flex flex-col gap-0.5">
-              {week.map(({ key, count, date }) => (
-                <div
-                  key={key}
-                  title={`${date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}: ${count} trade${count !== 1 ? "s" : ""}`}
-                  className={`w-2.5 h-2.5 rounded-sm ${getHeatmapColor(count)} transition-colors cursor-default`}
-                  style={{
-                    opacity:
-                      count > 0 ? 0.3 + (count / maxCount) * 0.7 : undefined,
-                  }}
-                />
-              ))}
-            </div>
+    <div className="w-full overflow-x-auto">
+      <div className="min-w-max">
+        {/* Month labels */}
+        <div className="flex gap-0.5 mb-1 ml-7 relative h-4">
+          {monthLabels.map(({ label, colIndex }) => (
+            <span
+              key={`${label}-${colIndex}`}
+              className="absolute text-[9px] text-muted-foreground"
+              style={{ left: `${colIndex * 11}px` }}
+            >
+              {label}
+            </span>
           ))}
+        </div>
+        <div className="flex gap-0.5">
+          {/* Day labels */}
+          <div className="flex flex-col gap-0.5 mr-1">
+            {(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const).map(
+              (d, i) => (
+                <span
+                  key={d}
+                  className="text-[9px] text-muted-foreground w-5 h-2.5 flex items-center justify-center"
+                >
+                  {i % 2 === 1 ? d[0] : ""}
+                </span>
+              ),
+            )}
+          </div>
+          {/* Grid */}
+          <div className="flex gap-0.5">
+            {weeks.map((week) => (
+              <div key={week[0].key} className="flex flex-col gap-0.5">
+                {week.map(({ key, count, date }) => (
+                  <div
+                    key={key}
+                    title={`${date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}: ${count} trade${count !== 1 ? "s" : ""}`}
+                    className={`w-2.5 h-2.5 rounded-sm ${getHeatmapColor(count)} transition-colors cursor-default`}
+                    style={{
+                      opacity:
+                        count > 0 ? 0.3 + (count / maxCount) * 0.7 : undefined,
+                    }}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
       {/* Legend */}
@@ -510,7 +513,7 @@ function StatCard({
   loading?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1 p-3 rounded-lg bg-muted/20 border border-border/50">
+    <div className="flex flex-col gap-1 p-3 rounded-lg bg-muted/20 border border-border/50 min-w-0">
       <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
         {label}
       </span>
@@ -525,7 +528,7 @@ function StatCard({
             <TrendingDown className="h-3 w-3 text-destructive shrink-0" />
           )}
           <span
-            className={`text-sm font-bold font-mono ${
+            className={`text-sm font-bold font-mono truncate max-w-full overflow-hidden block ${
               trend === "up"
                 ? "text-success"
                 : trend === "down"
@@ -559,7 +562,11 @@ function BondedCheck() {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function ProfilePage({ principal, onSelectToken }: ProfilePageProps) {
+export function ProfilePage({
+  principal,
+  onSelectToken,
+  onBack,
+}: ProfilePageProps) {
   const { btcUsd } = useBtcPrice();
 
   // Data states
@@ -794,6 +801,18 @@ export function ProfilePage({ principal, onSelectToken }: ProfilePageProps) {
 
   return (
     <div className="space-y-4 md:space-y-5 pb-4">
+      {/* ── Back Button ───────────────────────────────────────────────────── */}
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          data-ocid="profile.back.button"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Back
+        </button>
+      )}
       {/* ── A. Identity Header ─────────────────────────────────────────────── */}
       <Card
         data-ocid="profile.card"
@@ -823,7 +842,7 @@ export function ProfilePage({ principal, onSelectToken }: ProfilePageProps) {
               </div>
               {/* Full principal with copy */}
               <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs text-muted-foreground font-mono truncate max-w-[200px] sm:max-w-none">
+                <span className="text-xs text-muted-foreground font-mono break-all min-w-0 flex-1">
                   {principal}
                 </span>
                 <button
@@ -853,6 +872,22 @@ export function ProfilePage({ principal, onSelectToken }: ProfilePageProps) {
               )}
             </div>
 
+            {/* Mobile volume summary - visible only on mobile */}
+            <div className="flex sm:hidden items-center gap-3 mt-1">
+              <span className="text-xs text-muted-foreground">
+                Vol:{" "}
+                <span className="text-foreground font-mono font-semibold">
+                  {formatUsd(btcToUsd(stats.totalVolumeBtc, btcUsd))}
+                </span>
+              </span>
+              <span className="text-xs text-muted-foreground">
+                <span className="text-foreground font-semibold">
+                  {stats.totalTrades}
+                </span>{" "}
+                trades
+              </span>
+            </div>
+
             {/* Volume summary */}
             <div className="flex flex-col items-end gap-1 shrink-0 hidden sm:flex">
               <span className="text-xs text-muted-foreground">
@@ -872,7 +907,7 @@ export function ProfilePage({ principal, onSelectToken }: ProfilePageProps) {
       {/* ── B. Financial Summary ───────────────────────────────────────────── */}
       <div
         data-ocid="profile.section"
-        className="grid grid-cols-2 md:grid-cols-4 gap-2.5"
+        className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5"
       >
         <StatCard
           label="Portfolio Value"
@@ -911,14 +946,14 @@ export function ProfilePage({ principal, onSelectToken }: ProfilePageProps) {
             PnL Overview
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-5">
+        <CardContent className="p-3 sm:p-5">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1">
               <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
                 Realized PnL
               </span>
               <span
-                className={`text-base font-bold font-mono ${
+                className={`text-base font-bold font-mono break-words ${
                   pnl.realizedPnlBtc >= 0 ? "text-success" : "text-destructive"
                 }`}
               >
@@ -935,7 +970,7 @@ export function ProfilePage({ principal, onSelectToken }: ProfilePageProps) {
                 Unrealized PnL
               </span>
               <span
-                className={`text-base font-bold font-mono ${
+                className={`text-base font-bold font-mono break-words ${
                   pnl.unrealizedPnlBtc >= 0
                     ? "text-success"
                     : "text-destructive"
@@ -954,7 +989,7 @@ export function ProfilePage({ principal, onSelectToken }: ProfilePageProps) {
                 ROI
               </span>
               <span
-                className={`text-base font-bold font-mono ${
+                className={`text-base font-bold font-mono break-words ${
                   pnl.roiPercent >= 0 ? "text-success" : "text-destructive"
                 }`}
               >
@@ -993,7 +1028,7 @@ export function ProfilePage({ principal, onSelectToken }: ProfilePageProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
             <StatCard label="Total Buys" value={String(stats.totalBuys)} />
             <StatCard label="Total Sells" value={String(stats.totalSells)} />
             <StatCard
@@ -1076,74 +1111,125 @@ export function ProfilePage({ principal, onSelectToken }: ProfilePageProps) {
                 </div>
               </div>
 
-              {/* Holdings table */}
-              <div className="flex-1 overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-1.5 pr-3 text-muted-foreground font-semibold text-[10px] uppercase">
-                        #
-                      </th>
-                      <th className="text-left py-1.5 pr-3 text-muted-foreground font-semibold text-[10px] uppercase">
-                        Token
-                      </th>
-                      <th className="text-right py-1.5 pr-3 text-muted-foreground font-semibold text-[10px] uppercase">
-                        Balance
-                      </th>
-                      <th className="text-right py-1.5 pr-3 text-muted-foreground font-semibold text-[10px] uppercase">
-                        Value
-                      </th>
-                      <th className="text-right py-1.5 text-muted-foreground font-semibold text-[10px] uppercase">
-                        %
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/50">
-                    {portfolioData.map((item, i) => (
-                      <tr
-                        key={item.id}
-                        data-ocid={`profile.portfolio.item.${i + 1}`}
-                        className="hover:bg-muted/20 transition-colors"
-                      >
-                        <td className="py-2 pr-3 text-muted-foreground">
+              {/* Holdings table - mobile card list */}
+              <div className="flex-1">
+                <div className="md:hidden space-y-2">
+                  {portfolioData.map((item, i) => (
+                    <div
+                      key={item.id}
+                      data-ocid={`profile.portfolio.item.${i + 1}`}
+                      className="flex items-center justify-between gap-2 py-2 border-b border-border/50 last:border-0"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] text-muted-foreground w-4 shrink-0">
                           {i + 1}
-                        </td>
-                        <td className="py-2 pr-3">
-                          <div className="flex items-center gap-2">
-                            <img
-                              src={`https://api.odin.fun/v1/token/${item.id}/image`}
-                              alt={item.ticker}
-                              className="h-5 w-5 rounded-full object-cover bg-muted shrink-0"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display =
-                                  "none";
-                              }}
-                            />
+                        </span>
+                        <img
+                          src={`https://api.odin.fun/v1/token/${item.id}/image`}
+                          alt={item.ticker}
+                          className="h-6 w-6 rounded-full object-cover bg-muted shrink-0"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display =
+                              "none";
+                          }}
+                        />
+                        <div className="flex flex-col min-w-0">
+                          <div className="flex items-center gap-1">
                             <button
                               type="button"
                               onClick={() => handleOpenTokenDetail(item.id)}
-                              className="font-semibold text-primary hover:underline cursor-pointer"
+                              className="text-xs font-semibold text-primary hover:underline cursor-pointer truncate"
                             >
                               {item.ticker}
                             </button>
                             {item.token?.bonded && <BondedCheck />}
                           </div>
-                        </td>
-                        <td className="py-2 pr-3 text-right font-mono text-muted-foreground">
-                          {formatTokenAmount(item.balance)}
-                        </td>
-                        <td className="py-2 pr-3 text-right font-mono text-foreground">
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {formatTokenAmount(item.balance)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end shrink-0 max-w-[110px]">
+                        <span className="text-xs font-mono text-foreground font-semibold">
                           {formatUsd(item.valueUsd)}
-                        </td>
-                        <td className="py-2 text-right text-muted-foreground">
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
                           {totalPortfolioUsd > 0
                             ? `${((item.valueUsd / totalPortfolioUsd) * 100).toFixed(1)}%`
                             : "—"}
-                        </td>
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-1.5 pr-3 text-muted-foreground font-semibold text-[10px] uppercase">
+                          #
+                        </th>
+                        <th className="text-left py-1.5 pr-3 text-muted-foreground font-semibold text-[10px] uppercase">
+                          Token
+                        </th>
+                        <th className="text-right py-1.5 pr-3 text-muted-foreground font-semibold text-[10px] uppercase">
+                          Balance
+                        </th>
+                        <th className="text-right py-1.5 pr-3 text-muted-foreground font-semibold text-[10px] uppercase">
+                          Value
+                        </th>
+                        <th className="text-right py-1.5 text-muted-foreground font-semibold text-[10px] uppercase">
+                          %
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {portfolioData.map((item, i) => (
+                        <tr
+                          key={item.id}
+                          data-ocid={`profile.portfolio.item.${i + 1}`}
+                          className="hover:bg-muted/20 transition-colors"
+                        >
+                          <td className="py-2 pr-3 text-muted-foreground">
+                            {i + 1}
+                          </td>
+                          <td className="py-2 pr-3">
+                            <div className="flex items-center gap-2">
+                              <img
+                                src={`https://api.odin.fun/v1/token/${item.id}/image`}
+                                alt={item.ticker}
+                                className="h-5 w-5 rounded-full object-cover bg-muted shrink-0"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display =
+                                    "none";
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleOpenTokenDetail(item.id)}
+                                className="font-semibold text-primary hover:underline cursor-pointer"
+                              >
+                                {item.ticker}
+                              </button>
+                              {item.token?.bonded && <BondedCheck />}
+                            </div>
+                          </td>
+                          <td className="py-2 pr-3 text-right font-mono text-muted-foreground">
+                            {formatTokenAmount(item.balance)}
+                          </td>
+                          <td className="py-2 pr-3 text-right font-mono text-foreground">
+                            {formatUsd(item.valueUsd)}
+                          </td>
+                          <td className="py-2 text-right text-muted-foreground">
+                            {totalPortfolioUsd > 0
+                              ? `${((item.valueUsd / totalPortfolioUsd) * 100).toFixed(1)}%`
+                              : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -1163,15 +1249,18 @@ export function ProfilePage({ principal, onSelectToken }: ProfilePageProps) {
               No trade activity yet.
             </div>
           ) : (
-            <ActivityHeatmap trades={allTrades} />
+            <>
+              <ActivityHeatmap trades={allTrades} />
+              <p className="text-[10px] text-muted-foreground text-center mt-1 sm:hidden">
+                scroll to see full heatmap
+              </p>
+            </>
           )}
         </CardContent>
       </Card>
-
-      {/* ── G. Trade History ──────────────────────────────────────────────── */}
       <Card className="border-border bg-card shadow-card overflow-hidden">
         <CardHeader className="px-5 py-3 border-b border-border">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-sm font-bold text-foreground">
               Trade History
             </CardTitle>

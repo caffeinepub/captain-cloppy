@@ -42,6 +42,7 @@ interface HistoryPageProps {
   principal: string;
   onSetPrincipal: (p: string) => void;
   onSelectToken?: (token: OdinToken) => void;
+  onViewTraderProfile?: (principal: string) => void;
 }
 
 function truncatePrincipal(p?: string): string {
@@ -103,6 +104,7 @@ export function HistoryPage({
   principal,
   onSetPrincipal: _onSetPrincipal,
   onSelectToken,
+  onViewTraderProfile,
 }: HistoryPageProps) {
   const [odinTrades, setOdinTrades] = useState<OdinTrade[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -691,9 +693,23 @@ export function HistoryPage({
                       {/* Row 2: Trader + relative time */}
                       <div className="flex items-center justify-between mt-1">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-xs text-muted-foreground truncate">
-                            {trader}
-                          </span>
+                          {t.user || t.user_username ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onViewTraderProfile?.(
+                                  t.user || t.user_username || "",
+                                )
+                              }
+                              className="text-xs text-muted-foreground hover:text-primary hover:underline transition-colors cursor-pointer truncate"
+                            >
+                              {trader}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground truncate">
+                              {trader}
+                            </span>
+                          )}
                           {counterparty && (
                             <span className="text-[10px] text-muted-foreground/60 font-mono shrink-0">
                               {t.buy ? "from" : "to"}{" "}

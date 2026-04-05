@@ -74,6 +74,7 @@ export default function App() {
   const [selectedToken, setSelectedToken] = useState<OdinToken | undefined>(
     undefined,
   );
+  const [viewedTraderPrincipal, setViewedTraderPrincipal] = useState("");
 
   const { principal, setManualPrincipal } = useSiwbAuth();
 
@@ -89,6 +90,13 @@ export default function App() {
   const handleNavigate = (p: NavPage) => {
     setPage(p);
     setSidebarOpen(false);
+    // Reset viewed trader when navigating via sidebar/nav
+    setViewedTraderPrincipal("");
+  };
+
+  const handleViewTraderProfile = (traderPrincipal: string) => {
+    setViewedTraderPrincipal(traderPrincipal);
+    setPage("profile");
   };
 
   const { title, subtitle, short } = PAGE_TITLES[page];
@@ -158,6 +166,7 @@ export default function App() {
               principal={principal}
               onSetPrincipal={handleConnected}
               onSelectToken={handleSelectToken}
+              onViewTraderProfile={handleViewTraderProfile}
             />
           )}
           {page === "trading" && (
@@ -176,12 +185,21 @@ export default function App() {
               principal={principal}
               onSetPrincipal={handleConnected}
               onSelectToken={handleSelectToken}
+              onViewTraderProfile={handleViewTraderProfile}
             />
           )}
           {page === "profile" && (
             <ProfilePage
-              principal={principal}
+              principal={viewedTraderPrincipal || principal}
               onSelectToken={handleSelectToken}
+              onBack={
+                viewedTraderPrincipal
+                  ? () => {
+                      setViewedTraderPrincipal("");
+                      setPage("profile");
+                    }
+                  : undefined
+              }
             />
           )}
         </main>
