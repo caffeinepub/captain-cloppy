@@ -27,6 +27,7 @@ import {
   formatMcapAsUsd,
   formatPriceAsSats,
   formatTokenAmount,
+  getToken,
   getTokens,
   getUserBalances,
   getUserTrades,
@@ -641,7 +642,23 @@ export function ProfilePage({
 
       setProfile(profileData);
       setBalances(balanceData);
-      setTokens(tokenData.data);
+
+      // Fetch token details for any balance tokens not in the top-100 list
+      let allTokens = [...tokenData.data];
+      const missingIds = balanceData
+        .filter((b) => !allTokens.find((t) => t.id === b.id))
+        .map((b) => b.id);
+      if (missingIds.length > 0) {
+        const missingTokens = await Promise.all(
+          missingIds.map((id) => getToken(id).catch(() => null)),
+        );
+        allTokens = [
+          ...allTokens,
+          ...(missingTokens.filter(Boolean) as OdinToken[]),
+        ];
+      }
+
+      setTokens(allTokens);
       setLoading(false);
 
       // Phase 2: background progressive fetch of all trades
@@ -732,7 +749,7 @@ export function ProfilePage({
           token,
         };
       })
-      .filter((item) => item.valueUsd > 0)
+      .filter((item) => item.balance > 0)
       .sort((a, b) => b.valueUsd - a.valueUsd);
   }, [balances, tokens, btcUsd]);
 
