@@ -25,17 +25,16 @@ import { TradeStatus } from "../backend";
 import { useBtcPrice } from "../hooks/useBtcPrice";
 import { useGetTradeLogs } from "../hooks/useQueries";
 import {
-  ODIN_TOKEN_AMOUNT_DIVISOR,
   type OdinToken,
   type OdinTrade,
   formatBtcWithUsd,
   formatDate,
   formatPriceAsSats,
   formatTokenAmount,
-  formatUsdFromMsats,
   getGlobalTrades,
   getToken,
   getUserTrades,
+  parseOdinDate,
 } from "../lib/odinApi";
 import { TokenDetailModal } from "./TokenDetailModal";
 
@@ -45,14 +44,23 @@ interface HistoryPageProps {
   onSelectToken?: (token: OdinToken) => void;
 }
 
-// Truncate a principal/address for display
 function truncatePrincipal(p?: string): string {
-  if (!p) return "—";
+  if (!p) return "\u2014";
   if (p.length <= 14) return p;
-  return `${p.slice(0, 6)}…${p.slice(-4)}`;
+  return `${p.slice(0, 6)}...${p.slice(-4)}`;
 }
 
-// Clickable token name cell that opens detail modal
+function formatRelativeTime(raw: string | number | bigint): string {
+  const d = parseOdinDate(raw);
+  if (Number.isNaN(d.getTime())) return "\u2014";
+  const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (diff < 5) return "just now";
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
 function TokenCell({
   tokenId,
   tokenTicker,
@@ -80,6 +88,17 @@ function TokenCell({
   );
 }
 
+const BondedCheck = () => (
+  <svg
+    viewBox="0 0 22 22"
+    className="h-3.5 w-3.5 shrink-0 fill-[#1d9bf0]"
+    role="img"
+    aria-label="Bonded"
+  >
+    <path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z" />
+  </svg>
+);
+
 export function HistoryPage({
   principal,
   onSetPrincipal: _onSetPrincipal,
@@ -91,7 +110,6 @@ export function HistoryPage({
   const [loadingOdin, setLoadingOdin] = useState(false);
   const [errorOdin, setErrorOdin] = useState("");
   const [filterQuery, setFilterQuery] = useState("");
-  // Global feed state
   const [globalTrades, setGlobalTrades] = useState<OdinTrade[]>([]);
   const [globalCount, setGlobalCount] = useState(0);
   const [globalPage, setGlobalPage] = useState(1);
@@ -100,8 +118,6 @@ export function HistoryPage({
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [liveActive, setLiveActive] = useState(true);
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Token detail modal state
   const [detailToken, setDetailToken] = useState<OdinToken | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -142,7 +158,6 @@ export function HistoryPage({
     }
   }, []);
 
-  // Initial load
   useEffect(() => {
     fetchOdinTrades(principal, page);
   }, [principal, page, fetchOdinTrades]);
@@ -151,7 +166,6 @@ export function HistoryPage({
     fetchGlobalTrades(globalPage);
   }, [globalPage, fetchGlobalTrades]);
 
-  // Auto-refresh Global Feed every 15 seconds
   useEffect(() => {
     if (!liveActive) {
       if (liveIntervalRef.current) {
@@ -160,7 +174,6 @@ export function HistoryPage({
       }
       return;
     }
-    // Only auto-refresh on page 1
     if (globalPage !== 1) return;
     liveIntervalRef.current = setInterval(() => {
       fetchGlobalTrades(1, true);
@@ -213,7 +226,6 @@ export function HistoryPage({
   return (
     <div className="space-y-4 md:space-y-5">
       <Tabs defaultValue="odin" className="space-y-4">
-        {/* Tab controls row */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <TabsList
             data-ocid="history.tabs"
@@ -247,7 +259,7 @@ export function HistoryPage({
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 data-ocid="history.filter.search_input"
-                placeholder="Filter by token\u2026"
+                placeholder="Filter by token"
                 value={filterQuery}
                 onChange={(e) => setFilterQuery(e.target.value)}
                 className="pl-8 h-8 text-sm sm:w-44 bg-muted/40 border-border"
@@ -350,22 +362,11 @@ export function HistoryPage({
                               tokenId={t.token_id}
                               tokenTicker={
                                 t.token_ticker ??
-                                (t.token_id
-                                  ? `${t.token_id.slice(0, 8)}\u2026`
-                                  : t.token)
+                                (t.token_id ? t.token_id.slice(0, 8) : t.token)
                               }
                               onOpenDetail={handleOpenTokenDetail}
                             />
-                            {t.bonded && (
-                              <svg
-                                viewBox="0 0 22 22"
-                                className="h-3.5 w-3.5 shrink-0 fill-[#1d9bf0]"
-                                role="img"
-                                aria-label="Bonded"
-                              >
-                                <path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z" />
-                              </svg>
-                            )}
+                            {t.bonded && <BondedCheck />}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -376,10 +377,7 @@ export function HistoryPage({
                               <ArrowUpRight className="h-3.5 w-3.5 text-destructive" />
                             )}
                             <span
-                              className={[
-                                "text-[11px] font-semibold",
-                                t.buy ? "text-success" : "text-destructive",
-                              ].join(" ")}
+                              className={`text-[11px] font-semibold ${t.buy ? "text-success" : "text-destructive"}`}
                             >
                               {t.buy ? "BUY" : "SELL"}
                             </span>
@@ -404,7 +402,7 @@ export function HistoryPage({
               {totalPages > 1 && (
                 <div className="flex items-center justify-between px-4 md:px-5 py-4 border-t border-border">
                   <span className="text-xs text-muted-foreground">
-                    Page {page} of {totalPages} \u00b7 {totalCount} total
+                    Page {page} of {totalPages} &middot; {totalCount} total
                   </span>
                   <div className="flex gap-2">
                     <Button
@@ -516,12 +514,7 @@ export function HistoryPage({
                             <ArrowUpRight className="h-3.5 w-3.5 text-destructive" />
                           )}
                           <span
-                            className={[
-                              "text-[11px] font-semibold",
-                              log.tradeType === "buy"
-                                ? "text-success"
-                                : "text-destructive",
-                            ].join(" ")}
+                            className={`text-[11px] font-semibold ${log.tradeType === "buy" ? "text-success" : "text-destructive"}`}
                           >
                             {log.tradeType.toUpperCase()}
                           </span>
@@ -545,19 +538,20 @@ export function HistoryPage({
           )}
         </TabsContent>
 
-        {/* Global Feed */}
+        {/* Global Feed - Mobile-friendly card layout */}
         <TabsContent
           value="global"
           className="rounded-xl border border-border bg-card shadow-card overflow-hidden"
         >
+          {/* Header */}
           <div className="flex items-center justify-between px-4 md:px-5 py-3 border-b border-border">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                Live global trade activity from Odin.fun
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-xs text-muted-foreground truncate">
+                Live global trade activity
               </span>
               {lastUpdated && (
-                <span className="text-[10px] text-muted-foreground/60">
-                  · updated{" "}
+                <span className="text-[10px] text-muted-foreground/60 shrink-0">
+                  &middot;{" "}
                   {lastUpdated.toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
@@ -566,20 +560,14 @@ export function HistoryPage({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              {/* Live toggle */}
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setLiveActive((v) => !v)}
-                className={[
-                  "flex items-center gap-1 text-[10px] font-semibold transition-colors",
-                  liveActive ? "text-success" : "text-muted-foreground",
-                ].join(" ")}
-                title={
-                  liveActive
-                    ? "Live: ON (click to pause)"
-                    : "Live: OFF (click to resume)"
-                }
+                className={`flex items-center gap-1 text-[10px] font-semibold transition-colors ${
+                  liveActive ? "text-success" : "text-muted-foreground"
+                }`}
+                title={liveActive ? "Live: ON" : "Live: OFF"}
               >
                 <Wifi
                   className={`h-3 w-3 ${liveActive ? "animate-pulse" : ""}`}
@@ -628,131 +616,110 @@ export function HistoryPage({
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <Table
-                  data-ocid="history.global.table"
-                  className="min-w-[680px]"
-                >
-                  <TableHeader>
-                    <TableRow className="border-border hover:bg-transparent">
-                      <TableHead className="text-muted-foreground text-xs font-semibold uppercase">
-                        Time
-                      </TableHead>
-                      <TableHead className="text-muted-foreground text-xs font-semibold uppercase">
-                        Trader
-                      </TableHead>
-                      <TableHead className="text-muted-foreground text-xs font-semibold uppercase">
-                        Token
-                      </TableHead>
-                      <TableHead className="text-muted-foreground text-xs font-semibold uppercase">
-                        Type
-                      </TableHead>
-                      <TableHead className="text-muted-foreground text-xs font-semibold uppercase text-right">
-                        Value
-                      </TableHead>
-                      <TableHead className="text-muted-foreground text-xs font-semibold uppercase text-right">
-                        Token Amt
-                      </TableHead>
-                      <TableHead className="text-muted-foreground text-xs font-semibold uppercase text-right">
-                        Price
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {globalTrades.map((t, i) => (
-                      <TableRow
-                        key={t.id}
-                        data-ocid={`history.global.row.${i + 1}`}
-                        className="border-border hover:bg-muted/30"
-                      >
-                        <TableCell className="text-xs text-muted-foreground font-mono whitespace-nowrap">
-                          {formatDate(t.time)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="text-xs font-semibold text-foreground">
-                              {t.user_username
-                                ? t.user_username
-                                : truncatePrincipal(t.user)}
-                            </span>
-                            {/* Show receiver/sender detail */}
-                            {(t.receiver || t.sender) && (
-                              <span className="text-[10px] text-muted-foreground font-mono">
-                                {t.buy ? "→" : "←"}{" "}
-                                {truncatePrincipal(
-                                  t.buy ? t.receiver : t.sender,
-                                )}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1.5">
+              {/* Mobile-friendly card list */}
+              <div
+                className="divide-y divide-border"
+                data-ocid="history.global.list"
+              >
+                {globalTrades.map((t, i) => {
+                  const ticker =
+                    t.token_ticker ??
+                    (t.token_id ? t.token_id.slice(0, 8) : t.token);
+                  const trader = t.user_username
+                    ? t.user_username
+                    : truncatePrincipal(t.user);
+                  const counterparty = t.buy ? t.receiver : t.sender;
+                  return (
+                    <div
+                      key={t.id}
+                      data-ocid={`history.global.item.${i + 1}`}
+                      className="px-4 py-3 hover:bg-muted/20 transition-colors active:bg-muted/30"
+                    >
+                      {/* Row 1: Token logo + ticker + BUY/SELL */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {t.token_id && (
+                            <img
+                              src={`https://api.odin.fun/v1/token/${t.token_id}/image`}
+                              alt={ticker}
+                              width={28}
+                              height={28}
+                              className="rounded-full shrink-0 object-cover bg-muted w-7 h-7"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display =
+                                  "none";
+                              }}
+                            />
+                          )}
+                          <div className="flex items-center gap-1 min-w-0">
                             <TokenCell
                               tokenId={t.token_id}
-                              tokenTicker={
-                                t.token_ticker ??
-                                (t.token_id
-                                  ? `${t.token_id.slice(0, 8)}\u2026`
-                                  : t.token)
-                              }
+                              tokenTicker={ticker}
                               onOpenDetail={handleOpenTokenDetail}
                             />
-                            {t.bonded && (
-                              <svg
-                                viewBox="0 0 22 22"
-                                className="h-3.5 w-3.5 shrink-0 fill-[#1d9bf0]"
-                                role="img"
-                                aria-label="Bonded"
-                              >
-                                <path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z" />
-                              </svg>
-                            )}
+                            {t.bonded && <BondedCheck />}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            {t.buy ? (
-                              <ArrowDownLeft className="h-3.5 w-3.5 text-success" />
-                            ) : (
-                              <ArrowUpRight className="h-3.5 w-3.5 text-destructive" />
-                            )}
-                            <span
-                              className={[
-                                "text-[11px] font-semibold",
-                                t.buy ? "text-success" : "text-destructive",
-                              ].join(" ")}
-                            >
-                              {t.buy ? "BUY" : "SELL"}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {t.buy ? (
+                            <ArrowDownLeft className="h-3.5 w-3.5 text-success" />
+                          ) : (
+                            <ArrowUpRight className="h-3.5 w-3.5 text-destructive" />
+                          )}
+                          <span
+                            className={`text-[11px] font-bold ${t.buy ? "text-success" : "text-destructive"}`}
+                          >
+                            {t.buy ? "BUY" : "SELL"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Row 2: Trader + relative time */}
+                      <div className="flex items-center justify-between mt-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-xs text-muted-foreground truncate">
+                            {trader}
+                          </span>
+                          {counterparty && (
+                            <span className="text-[10px] text-muted-foreground/60 font-mono shrink-0">
+                              {t.buy ? "from" : "to"}{" "}
+                              {truncatePrincipal(counterparty)}
                             </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex flex-col items-end gap-0">
-                            <span className="font-mono text-xs text-foreground">
-                              {formatBtcWithUsd(t.amount_btc, btcUsd)}
-                            </span>
-                            {btcUsd && (
-                              <span className="text-[10px] text-success font-semibold">
-                                {formatUsdFromMsats(t.amount_btc, btcUsd)}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs text-foreground">
-                          {formatTokenAmount(t.amount_token)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs text-primary">
+                          )}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground/60 shrink-0 ml-2">
+                          {formatRelativeTime(t.time)}
+                        </span>
+                      </div>
+
+                      {/* Row 3: Value in BTC + USD */}
+                      <div className="mt-1">
+                        <span className="font-mono text-xs text-foreground">
+                          {formatBtcWithUsd(t.amount_btc, btcUsd)}
+                        </span>
+                      </div>
+
+                      {/* Row 4: Token amount + price */}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-muted-foreground">
+                          Amt: {formatTokenAmount(t.amount_token)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/50">
+                          ·
+                        </span>
+                        <span className="text-[10px] text-primary font-mono">
                           {formatPriceAsSats(t.price)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+
+              {/* Pagination */}
               <div className="flex items-center justify-between px-4 md:px-5 py-4 border-t border-border">
                 <span className="text-xs text-muted-foreground">
-                  Page {globalPage} of {globalTotalPages} \u00b7 {globalCount}{" "}
+                  Page {globalPage} of {globalTotalPages} &middot; {globalCount}{" "}
                   total
                 </span>
                 <div className="flex gap-2">
@@ -787,7 +754,6 @@ export function HistoryPage({
         </TabsContent>
       </Tabs>
 
-      {/* Token Detail Modal */}
       <TokenDetailModal
         token={detailToken}
         open={detailOpen}

@@ -280,7 +280,7 @@ function LargeTransactionsFeed({
                   className="text-xs font-bold text-foreground min-w-[36px] text-left hover:text-primary hover:underline transition-colors cursor-pointer"
                   title={ticker}
                 >
-                  {ticker.length > 8 ? `${ticker.slice(0, 6)}…` : ticker}
+                  {ticker}
                 </button>
 
                 <span
@@ -301,11 +301,9 @@ function LargeTransactionsFeed({
                 <div className="flex flex-col items-end shrink-0">
                   <span className="text-[9px] text-muted-foreground/70 font-mono">
                     {trade.user_username
-                      ? trade.user_username.length > 10
-                        ? `${trade.user_username.slice(0, 8)}…`
-                        : trade.user_username
+                      ? trade.user_username
                       : trade.user
-                        ? `${trade.user.slice(0, 6)}…`
+                        ? trade.user
                         : "—"}
                   </span>
                   <span className="text-[9px] text-muted-foreground/50">
@@ -446,7 +444,7 @@ function GlobalFeedMini({
                     className="text-xs font-bold text-foreground min-w-[36px] text-left hover:text-primary hover:underline transition-colors cursor-pointer"
                     title={ticker}
                   >
-                    {ticker.length > 8 ? `${ticker.slice(0, 6)}…` : ticker}
+                    {ticker}
                   </button>
 
                   <span
@@ -460,11 +458,9 @@ function GlobalFeedMini({
                   <div className="flex flex-col items-end shrink-0">
                     <span className="text-[9px] text-muted-foreground/70 font-mono">
                       {trade.user_username
-                        ? trade.user_username.length > 10
-                          ? `${trade.user_username.slice(0, 8)}…`
-                          : trade.user_username
+                        ? trade.user_username
                         : trade.user
-                          ? `${trade.user.slice(0, 6)}…`
+                          ? trade.user
                           : "—"}
                     </span>
                     <span className="text-[9px] text-muted-foreground/50">
@@ -509,13 +505,76 @@ export function DashboardPage({
   const [detailToken, setDetailToken] = useState<OdinToken | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
-  useEffect(() => {
+  const fetchTop15MinVolume = useCallback(async () => {
     setLoadingTrending(true);
-    getTokens({ limit: 15, sort: "volume:desc" })
-      .then(({ data }) => setTrendingTokens(data))
-      .catch(() => setTrendingTokens([]))
-      .finally(() => setLoadingTrending(false));
+    try {
+      // Fetch recent trades sorted by time desc, fetch enough to cover 15-minute window
+      const { data: trades } = await getGlobalTrades(1, 500);
+      const now = Date.now();
+      const cutoff = now - 15 * 60 * 1000; // 15 minutes ago
+
+      // Filter trades within last 15 minutes
+      const recentTrades = trades.filter((t) => {
+        const tradeTime = parseOdinDate(t.time).getTime();
+        return tradeTime >= cutoff;
+      });
+
+      if (recentTrades.length === 0) {
+        // Fallback: show top tokens by volume if no trades in last 15 min
+        const { data } = await getTokens({ limit: 10, sort: "volume:desc" });
+        setTrendingTokens(data);
+        return;
+      }
+
+      // Aggregate volume (amount_btc in milli-sats) per token_id
+      const volumeMap = new Map<
+        string,
+        { volumeMsats: number; ticker: string }
+      >();
+      for (const t of recentTrades) {
+        const tokenId = t.token_id ?? t.token;
+        if (!tokenId) continue;
+        const existing = volumeMap.get(tokenId);
+        if (existing) {
+          existing.volumeMsats += t.amount_btc ?? 0;
+        } else {
+          volumeMap.set(tokenId, {
+            volumeMsats: t.amount_btc ?? 0,
+            ticker: t.token_ticker ?? "",
+          });
+        }
+      }
+
+      // Sort by volume desc, take top 10
+      const sorted = Array.from(volumeMap.entries())
+        .sort((a, b) => b[1].volumeMsats - a[1].volumeMsats)
+        .slice(0, 10);
+
+      // Fetch token details in parallel
+      const tokenDetails = await Promise.all(
+        sorted.map(async ([tokenId]) => {
+          const detail = await getToken(tokenId);
+          return detail;
+        }),
+      );
+
+      const validTokens = tokenDetails.filter(
+        (t): t is OdinToken => t !== null,
+      );
+      setTrendingTokens(validTokens);
+    } catch {
+      setTrendingTokens([]);
+    } finally {
+      setLoadingTrending(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchTop15MinVolume();
+    // Refresh every 15 seconds
+    const interval = setInterval(fetchTop15MinVolume, 15_000);
+    return () => clearInterval(interval);
+  }, [fetchTop15MinVolume]);
 
   const handleTokenClick = (token: OdinToken) => {
     setDetailToken(token);
@@ -524,18 +583,16 @@ export function DashboardPage({
 
   return (
     <div className="space-y-5 md:space-y-6">
-      {/* Large Transactions Feed — paling atas */}
+      {/* Large Transactions Feed — top of dashboard */}
       <LargeTransactionsFeed onTokenClick={handleTokenClick} />
 
-      {/* Top 15 Volume — visual card grid */}
+      {/* Hot Tokens — visual card grid */}
       <div className="rounded-xl border border-border bg-card p-4 md:p-5 shadow-card">
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-semibold text-foreground">
-            Top 15 Volume
-          </h3>
+          <h3 className="text-sm font-semibold text-foreground">Hot Tokens</h3>
           <span className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Zap className="h-3 w-3" /> Top 15 by volume
+            <Zap className="h-3 w-3" /> Highest volume in the last 15 min
           </span>
         </div>
 

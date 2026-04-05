@@ -883,12 +883,8 @@ export function TokenDetailModal({
                             {/* Row 2: username + direction + BTC+USD value */}
                             <div className="flex items-center justify-between mt-1">
                               <div className="flex items-center gap-1.5 min-w-0">
-                                <span className="text-muted-foreground/70 truncate max-w-[100px]">
-                                  {username
-                                    ? username.length > 14
-                                      ? `${username.slice(0, 8)}…${username.slice(-4)}`
-                                      : username
-                                    : "—"}
+                                <span className="text-muted-foreground/70">
+                                  {username ?? "—"}
                                 </span>
                                 {directionLabel && (
                                   <span className="text-[10px] text-sky-400/80 font-mono whitespace-nowrap">
@@ -986,9 +982,7 @@ export function TokenDetailModal({
                       {holders.map((holder, i) => {
                         const rank = i + 1;
                         const displayName = holder.user_username?.trim()
-                          ? holder.user_username.length > 18
-                            ? `${holder.user_username.slice(0, 12)}…${holder.user_username.slice(-4)}`
-                            : holder.user_username
+                          ? holder.user_username
                           : abbreviatePrincipal(holder.user);
 
                         const rankColor =
