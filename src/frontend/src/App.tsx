@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import {
-  Bot,
   Compass,
+  FlaskConical,
   History,
   LayoutDashboard,
   Menu,
@@ -10,11 +10,11 @@ import {
   User,
 } from "lucide-react";
 import { useState } from "react";
-import { BotPage } from "./components/BotPage";
 import { DashboardPage } from "./components/DashboardPage";
 import { HistoryPage } from "./components/HistoryPage";
 import { ProfilePage } from "./components/ProfilePage";
 import { type NavPage, Sidebar } from "./components/Sidebar";
+import { StrategyLabPage } from "./components/StrategyLabPage";
 import { TokenExplorerPage } from "./components/TokenExplorerPage";
 import { TradingPage } from "./components/TradingPage";
 import { useSiwbAuth } from "./hooks/useSiwbAuth";
@@ -40,9 +40,9 @@ const PAGE_TITLES: Record<
     short: "Explorer",
   },
   bot: {
-    title: "Bot Automation",
-    subtitle: "Manage trading strategies",
-    short: "Bot",
+    title: "Strategy Lab",
+    subtitle: "Backtest & simulate trading strategies",
+    short: "Lab",
   },
   history: {
     title: "Transaction History",
@@ -182,7 +182,7 @@ export default function App() {
               onViewTraderProfile={handleViewTraderProfile}
             />
           )}
-          {page === "bot" && <BotPage />}
+          {page === "bot" && <StrategyLabPage />}
           {page === "history" && (
             <HistoryPage
               principal={principal}
@@ -259,3 +259,6 @@ export default function App() {
     </div>
   );
 }
+
+// Keep FlaskConical in scope to avoid unused import warnings if referenced elsewhere
+export { FlaskConical };

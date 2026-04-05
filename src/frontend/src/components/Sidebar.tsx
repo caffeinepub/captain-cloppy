@@ -1,6 +1,6 @@
 import {
-  Bot,
   Compass,
+  FlaskConical,
   History,
   LayoutDashboard,
   LifeBuoy,
@@ -32,7 +32,7 @@ const navItems: {
   { page: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { page: "trading", label: "Trading", icon: TrendingUp },
   { page: "explorer", label: "Explorer", icon: Compass },
-  { page: "bot", label: "Bot", icon: Bot },
+  { page: "bot", label: "Strategy Lab", icon: FlaskConical },
   { page: "history", label: "History", icon: History },
   { page: "profile", label: "Profile", icon: User },
 ];
@@ -64,7 +64,7 @@ export function Sidebar({
             Captain Cloppy
           </span>
           <p className="text-[11px] text-zinc-400 leading-none mt-0.5 whitespace-nowrap">
-            ODIN•FUN
+            ODIN&bull;FUN
           </p>
         </div>
         {/* Close button — mobile only */}

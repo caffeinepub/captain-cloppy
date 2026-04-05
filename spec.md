@@ -1,38 +1,28 @@
-# Captain Cloppy
+# Captain Cloppy - Strategy Lab
 
 ## Current State
-Profile page (`ProfilePage.tsx`) has multiple mobile layout issues:
-- `StatCard` component spans have no overflow protection — `font-mono` BTC values overflow grid cells
-- `grid-cols-2 md:grid-cols-4` in Financial Summary and Trading Stats Grid causes content overflow on narrow screens
-- `break-all` on BTC monospace values splits numbers mid-digit
-- Activity Heatmap has no scroll affordance
-- Portfolio mobile cards have `shrink-0` on value column without overflow guard
-- Identity Header principal ID uses `max-w-[160px]` fixed width
+The app has a 'Bot Automation' (BotPage.tsx) page with basic strategy CRUD (create/edit/delete/toggle). It connects to backend hooks for strategies. Navigation in Sidebar and App.tsx references the 'bot' page.
 
 ## Requested Changes (Diff)
 
 ### Add
-- `min-w-0` to all grid children to prevent overflow blowout
-- Scroll affordance hint on Activity Heatmap
-- `overflow-hidden` / `truncate` guards where needed
+- New `StrategyLabPage.tsx` component replacing BotPage.tsx
+- Backtest Simulator: user picks a token, entry price, strategy type (BUY dip / SELL pump / DCA), date range, and runs a simulated backtest using historical candle data from Odin.fun API
+- Paper Trading Tracker: list of simulated open positions (stored in localStorage), showing entry price, current price, P&L
+- Strategy Builder: UI to configure conditions (price target %, stop loss %, DCA interval) and save strategies locally
 
 ### Modify
-- `StatCard` inner value `<span>`: add `truncate` + `max-w-full` + `overflow-hidden` so long BTC strings don't bleed outside card
-- Financial Summary grid: change to `grid-cols-1 sm:grid-cols-2 md:grid-cols-4` so on very small phones each card gets full width
-- Trading Stats Grid: same responsive grid adjustment
-- PnL section values: replace `break-all` with `break-words` (cleaner mid-word breaks)
-- Portfolio mobile card right-side value column: add `max-w-[120px]` guard so left side doesn't collapse
-- Identity Header principal `max-w-[160px]`: remove fixed pixel cap, use `min-w-0 flex-1` instead
-- Activity Heatmap wrapper: add `text-xs text-muted-foreground` scroll hint below on mobile
+- Sidebar.tsx: rename 'Bot' label to 'Strategy Lab', change icon from Bot to FlaskConical
+- App.tsx: rename page title from 'Bot Automation' to 'Strategy Lab', update subtitle to 'Backtest & simulate trading strategies'
+- Replace `<BotPage />` render with `<StrategyLabPage />`
 
 ### Remove
-- `break-all` class from PnL BTC value spans (replaced with `break-words`)
+- BotPage.tsx is effectively replaced (keep file to avoid breaking imports, but StrategyLabPage is what renders)
 
 ## Implementation Plan
-1. Fix `StatCard` component to add `truncate overflow-hidden max-w-full` to value span and `min-w-0` to outer div
-2. Update Financial Summary grid to `grid-cols-1 sm:grid-cols-2 md:grid-cols-4`
-3. Update Trading Stats Grid to `grid-cols-1 sm:grid-cols-2 md:grid-cols-4`
-4. Replace `break-all` with `break-words` in PnL section
-5. Fix Identity Header principal ID display — remove `max-w-[160px]`, use `min-w-0 flex-1 break-all`
-6. Fix Portfolio mobile card right-side column with max-width guard
-7. Add scroll affordance text below Activity Heatmap on mobile
+1. Create `StrategyLabPage.tsx` with 3 tabs: Backtest, Paper Trading, Strategy Builder
+2. Backtest tab: token selector (search by ticker from API), entry/exit conditions form, date range, fetch candles from Odin API, simulate trades, show results (total return %, trades executed, win rate, max drawdown)
+3. Paper Trading tab: add simulated position (token, amount, entry price), list open positions with current price fetched live, show P&L per position and total, store in localStorage
+4. Strategy Builder tab: form to configure strategy (name, token, buy condition, sell condition, stop loss, DCA settings), save list to localStorage, show saved strategies
+5. Update Sidebar.tsx: icon FlaskConical, label 'Strategy Lab'
+6. Update App.tsx: title 'Strategy Lab', subtitle 'Backtest & simulate strategies', import StrategyLabPage
