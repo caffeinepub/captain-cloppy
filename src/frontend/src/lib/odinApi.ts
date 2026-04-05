@@ -150,11 +150,13 @@ export interface OdinTokensResponse {
 export async function searchTokens(query: string): Promise<OdinToken[]> {
   if (!query.trim()) return [];
   const res = await fetch(
-    `${BASE_URL}/tokens?search=${encodeURIComponent(query)}&limit=10`,
+    `${BASE_URL}/tokens?search=${encodeURIComponent(query)}&limit=20&sort=market_cap:desc`,
   );
   if (!res.ok) throw new Error("Failed to fetch tokens");
   const json = await res.json();
-  return json.data ?? [];
+  const data: OdinToken[] = json.data ?? [];
+  // Sort by market_cap descending (highest first)
+  return data.sort((a, b) => (b.marketcap ?? 0) - (a.marketcap ?? 0));
 }
 
 export async function getTokens(

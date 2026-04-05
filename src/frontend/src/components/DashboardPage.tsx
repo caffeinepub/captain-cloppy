@@ -182,8 +182,6 @@ function LargeTransactionsFeed({
 }) {
   const [largeTrades, setLargeTrades] = useState<OdinTrade[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isLive, setIsLive] = useState(true);
-  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { btcUsd } = useBtcPrice();
 
@@ -208,7 +206,6 @@ function LargeTransactionsFeed({
             )
             .slice(0, 3);
           setLargeTrades(filtered);
-          setLastRefreshed(new Date());
         })
         .catch(() => {})
         .finally(() => {
@@ -227,16 +224,14 @@ function LargeTransactionsFeed({
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    if (isLive) {
-      intervalRef.current = setInterval(() => fetchLarge(false), 15_000);
-    }
+    intervalRef.current = setInterval(() => fetchLarge(false), 15_000);
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
     };
-  }, [isLive, fetchLarge]);
+  }, [fetchLarge]);
 
   return (
     <div className="rounded-xl border border-amber-500/30 bg-card p-4 md:p-5 shadow-card">
@@ -245,36 +240,6 @@ function LargeTransactionsFeed({
         <h3 className="text-sm font-semibold text-foreground">
           Large Transactions
         </h3>
-        <span className="text-[10px] text-amber-400/70 font-medium">
-          &gt;$500
-        </span>
-        <div className="ml-auto flex items-center gap-2">
-          {lastRefreshed && (
-            <span className="text-[10px] text-muted-foreground/60 hidden sm:inline">
-              {lastRefreshed.toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              })}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => setIsLive((v) => !v)}
-            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border transition-colors ${
-              isLive
-                ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                : "bg-muted/40 text-muted-foreground border-border"
-            }`}
-          >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                isLive ? "bg-amber-400 animate-pulse" : "bg-muted-foreground"
-              }`}
-            />
-            {isLive ? "LIVE" : "PAUSED"}
-          </button>
-        </div>
       </div>
 
       <div className="space-y-1.5">
