@@ -53,18 +53,18 @@ export function Sidebar({
       ].join(" ")}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-sidebar-border">
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-sidebar-border bg-black">
         <img
-          src="/assets/20601_11zon-019d5072-212a-741a-a639-a67bddd46f3d.png"
+          src="/assets/2062-019d5d43-9b5b-74da-87b1-d706e80113b7.jpeg"
           alt="Captain Cloppy Logo"
-          className="h-10 w-10 rounded-lg object-contain bg-primary/10"
+          className="h-14 w-14 rounded-xl object-contain flex-shrink-0 shadow-sm bg-black"
         />
         <div className="flex-1 min-w-0">
-          <span className="text-base font-bold text-foreground tracking-tight leading-tight">
+          <span className="text-base font-bold text-white tracking-tight leading-tight">
             Captain Cloppy
           </span>
-          <p className="text-[11px] text-muted-foreground leading-none mt-0.5">
-            Trading Automation
+          <p className="text-[11px] text-zinc-400 leading-none mt-0.5">
+            ODIN•FUN
           </p>
         </div>
         {/* Close button — mobile only */}
@@ -72,7 +72,7 @@ export function Sidebar({
           type="button"
           onClick={onClose}
           aria-label="Close sidebar"
-          className="md:hidden flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+          className="md:hidden flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white transition-colors"
         >
           <X className="h-4 w-4" />
         </button>

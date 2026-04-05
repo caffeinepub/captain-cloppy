@@ -140,63 +140,104 @@ function formatRelativeTime(raw: string | number | bigint): string {
 
 // ─── PnL Calculator ──────────────────────────────────────────────────────────
 
+// Each BUY lot tracks how many tokens were bought and at what total BTC cost.
+interface BuyLot {
+  tokenQty: number; // raw token units (before divisor)
+  btcCost: number; // total BTC spent on this lot
+}
+
 function calculatePnl(
   trades: OdinTrade[],
   balances: OdinBalance[],
   tokens: OdinToken[],
 ): PnlData {
-  // Sort trades oldest first
+  // Sort trades oldest first (FIFO requires chronological order)
   const sorted = [...trades].sort((a, b) => {
     const da = parseOdinDate(a.time).getTime();
     const db = parseOdinDate(b.time).getTime();
     return da - db;
   });
 
-  // FIFO matching per token
-  const buyQueues: Record<string, number[]> = {}; // tokenId -> array of btc cost per trade
+  // FIFO queue per token: each entry is a BuyLot
+  const buyQueues: Record<string, BuyLot[]> = {};
   let realizedPnlBtc = 0;
   let totalInvestedBtc = 0;
   let totalReturnedBtc = 0;
 
   for (const t of sorted) {
     const tokenId = t.token_id ?? t.token;
-    const tradeBtc = msatsToBtc(t.amount_btc);
     if (!tokenId) continue;
+
+    const tradeBtc = msatsToBtc(t.amount_btc);
+    const rawTokenQty = t.amount_token ?? 0; // raw units
 
     if (t.buy) {
       totalInvestedBtc += tradeBtc;
       if (!buyQueues[tokenId]) buyQueues[tokenId] = [];
-      buyQueues[tokenId].push(tradeBtc);
+      buyQueues[tokenId].push({ tokenQty: rawTokenQty, btcCost: tradeBtc });
     } else {
+      // SELL — match against oldest BUY lots (FIFO) by token quantity
       totalReturnedBtc += tradeBtc;
-      const queue = buyQueues[tokenId];
-      if (queue && queue.length > 0) {
-        const buyCost = queue.shift() ?? 0;
-        realizedPnlBtc += tradeBtc - buyCost;
-      } else {
-        // No matching buy — treat as pure gain
-        realizedPnlBtc += tradeBtc;
+
+      // Price per raw token unit on this sell
+      const sellPricePerUnit = rawTokenQty > 0 ? tradeBtc / rawTokenQty : 0;
+      let qtyToMatch = rawTokenQty;
+      const queue = buyQueues[tokenId] ?? [];
+
+      while (qtyToMatch > 0 && queue.length > 0) {
+        const lot = queue[0];
+
+        if (lot.tokenQty <= qtyToMatch) {
+          // Consume the entire lot
+          const lotSellBtc = lot.tokenQty * sellPricePerUnit;
+          realizedPnlBtc += lotSellBtc - lot.btcCost;
+          qtyToMatch -= lot.tokenQty;
+          queue.shift();
+        } else {
+          // Partially consume this lot
+          const fraction = qtyToMatch / lot.tokenQty;
+          const partialCost = lot.btcCost * fraction;
+          const partialSellBtc = qtyToMatch * sellPricePerUnit;
+          realizedPnlBtc += partialSellBtc - partialCost;
+          lot.btcCost -= partialCost;
+          lot.tokenQty -= qtyToMatch;
+          qtyToMatch = 0;
+        }
       }
+
+      // If no matching buys (e.g. tokens received via transfer), treat sell proceeds as pure gain
+      if (qtyToMatch > 0) {
+        realizedPnlBtc += qtyToMatch * sellPricePerUnit;
+      }
+
+      buyQueues[tokenId] = queue;
     }
   }
 
-  // Unrealized PnL: current holdings value vs cost basis
+  // Unrealized PnL: value of remaining FIFO lots at current market price
   let unrealizedPnlBtc = 0;
   for (const balance of balances) {
-    const remaining = buyQueues[balance.id];
-    if (!remaining || remaining.length === 0) continue;
-    const totalBuyCost = remaining.reduce((a, b) => a + b, 0);
+    const queue = buyQueues[balance.id];
+    if (!queue || queue.length === 0) continue;
+
     const token = tokens.find((t) => t.id === balance.id);
     if (!token?.price) continue;
-    // current price in BTC
-    const tokenAmt = balance.balance / ODIN_TOKEN_AMOUNT_DIVISOR;
-    const priceInBtc = token.price / 1_000 / SATS_PER_BTC;
-    const currentValue = tokenAmt * priceInBtc;
-    unrealizedPnlBtc += currentValue - totalBuyCost;
+
+    const pricePerRawUnit =
+      token.price / 1_000 / SATS_PER_BTC / ODIN_TOKEN_AMOUNT_DIVISOR;
+
+    // Sum remaining cost basis and current market value from FIFO lots
+    const remainingCostBtc = queue.reduce((sum, lot) => sum + lot.btcCost, 0);
+    const remainingQtyRaw = queue.reduce((sum, lot) => sum + lot.tokenQty, 0);
+    const currentValueBtc = remainingQtyRaw * pricePerRawUnit;
+
+    unrealizedPnlBtc += currentValueBtc - remainingCostBtc;
   }
 
+  // ROI based on total PnL (realized + unrealized) vs total invested
+  const totalPnlBtc = realizedPnlBtc + unrealizedPnlBtc;
   const roiPercent =
-    totalInvestedBtc > 0 ? (realizedPnlBtc / totalInvestedBtc) * 100 : 0;
+    totalInvestedBtc > 0 ? (totalPnlBtc / totalInvestedBtc) * 100 : 0;
 
   return {
     realizedPnlBtc,
