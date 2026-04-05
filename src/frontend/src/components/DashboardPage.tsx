@@ -481,7 +481,23 @@ function GlobalFeedMini({
 
 // ─── Dashboard Page ──────────────────────────────────────────────────────────
 
-const TRENDING_SKELETON_IDS = ["sk1", "sk2", "sk3", "sk4", "sk5"] as const;
+const TRENDING_SKELETON_IDS = [
+  "sk1",
+  "sk2",
+  "sk3",
+  "sk4",
+  "sk5",
+  "sk6",
+  "sk7",
+  "sk8",
+  "sk9",
+  "sk10",
+  "sk11",
+  "sk12",
+  "sk13",
+  "sk14",
+  "sk15",
+] as const;
 
 export function DashboardPage({
   principal: _principal,
@@ -495,7 +511,7 @@ export function DashboardPage({
 
   useEffect(() => {
     setLoadingTrending(true);
-    getTokens({ limit: 6, sort: "volume:desc" })
+    getTokens({ limit: 15, sort: "volume:desc" })
       .then(({ data }) => setTrendingTokens(data))
       .catch(() => setTrendingTokens([]))
       .finally(() => setLoadingTrending(false));
@@ -511,15 +527,15 @@ export function DashboardPage({
       {/* Large Transactions Feed — paling atas */}
       <LargeTransactionsFeed onTokenClick={handleTokenClick} />
 
-      {/* Trending Tokens — visual card grid */}
+      {/* Top 15 Volume — visual card grid */}
       <div className="rounded-xl border border-border bg-card p-4 md:p-5 shadow-card">
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-semibold text-foreground">
-            Trending Tokens
+            Top 15 Volume
           </h3>
           <span className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Zap className="h-3 w-3" /> by volume
+            <Zap className="h-3 w-3" /> Top 15 by volume
           </span>
         </div>
 
