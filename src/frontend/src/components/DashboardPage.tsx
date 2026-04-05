@@ -18,6 +18,7 @@ import {
   formatMcapAsUsd,
   formatPriceAsSats,
   getGlobalTrades,
+  getToken,
   getTokenImageUrl,
   getTokens,
   parseOdinDate,
@@ -174,13 +175,26 @@ function TrendingTokenCard({
 const LARGE_TX_THRESHOLD_USD = 500;
 const LARGE_TX_SKELETON_IDS = ["lt1", "lt2", "lt3"] as const;
 
-function LargeTransactionsFeed() {
+function LargeTransactionsFeed({
+  onTokenClick,
+}: {
+  onTokenClick?: (token: OdinToken) => void;
+}) {
   const [largeTrades, setLargeTrades] = useState<OdinTrade[]>([]);
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { btcUsd } = useBtcPrice();
+
+  const handleTickerClick = (tokenId: string | undefined) => {
+    if (!tokenId || !onTokenClick) return;
+    getToken(tokenId)
+      .then((token) => {
+        if (token) onTokenClick(token);
+      })
+      .catch(() => {});
+  };
 
   const fetchLarge = useCallback(
     (isInitial = false) => {
@@ -301,9 +315,14 @@ function LargeTransactionsFeed() {
                   {isBuy ? "BUY" : "SELL"}
                 </Badge>
 
-                <span className="text-xs font-bold text-foreground min-w-[36px]">
+                <button
+                  type="button"
+                  onClick={() => handleTickerClick(trade.token_id)}
+                  className="text-xs font-bold text-foreground min-w-[36px] text-left hover:text-primary hover:underline transition-colors cursor-pointer"
+                  title={ticker}
+                >
                   {ticker.length > 8 ? `${ticker.slice(0, 6)}…` : ticker}
-                </span>
+                </button>
 
                 <span
                   className={`font-mono text-[10px] font-semibold flex-1 truncate ${
@@ -347,13 +366,26 @@ function LargeTransactionsFeed() {
 
 const FEED_SKELETON_IDS = ["f1", "f2", "f3", "f4", "f5"] as const;
 
-function GlobalFeedMini() {
+function GlobalFeedMini({
+  onTokenClick,
+}: {
+  onTokenClick?: (token: OdinToken) => void;
+}) {
   const [trades, setTrades] = useState<OdinTrade[]>([]);
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { btcUsd } = useBtcPrice();
+
+  const handleTickerClick = (tokenId: string | undefined) => {
+    if (!tokenId || !onTokenClick) return;
+    getToken(tokenId)
+      .then((token) => {
+        if (token) onTokenClick(token);
+      })
+      .catch(() => {});
+  };
 
   const fetchFeed = useCallback((isInitial = false) => {
     if (isInitial) setLoading(true);
@@ -452,9 +484,14 @@ function GlobalFeedMini() {
                     {isBuy ? "BUY" : "SELL"}
                   </Badge>
 
-                  <span className="text-xs font-bold text-foreground min-w-[36px]">
+                  <button
+                    type="button"
+                    onClick={() => handleTickerClick(trade.token_id)}
+                    className="text-xs font-bold text-foreground min-w-[36px] text-left hover:text-primary hover:underline transition-colors cursor-pointer"
+                    title={ticker}
+                  >
                     {ticker.length > 8 ? `${ticker.slice(0, 6)}…` : ticker}
-                  </span>
+                  </button>
 
                   <span
                     className={`font-mono text-[10px] font-semibold flex-1 truncate ${
@@ -516,7 +553,7 @@ export function DashboardPage({
   return (
     <div className="space-y-5 md:space-y-6">
       {/* Large Transactions Feed — paling atas */}
-      <LargeTransactionsFeed />
+      <LargeTransactionsFeed onTokenClick={handleTokenClick} />
 
       {/* Trending Tokens — visual card grid */}
       <div className="rounded-xl border border-border bg-card p-4 md:p-5 shadow-card">
@@ -555,7 +592,7 @@ export function DashboardPage({
       </div>
 
       {/* Mini Global Feed */}
-      <GlobalFeedMini />
+      <GlobalFeedMini onTokenClick={handleTokenClick} />
 
       {/* Token Detail Modal */}
       <TokenDetailModal
