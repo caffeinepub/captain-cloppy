@@ -150,12 +150,19 @@ export interface OdinTokensResponse {
 export async function searchTokens(query: string): Promise<OdinToken[]> {
   if (!query.trim()) return [];
   const res = await fetch(
-    `${BASE_URL}/tokens?search=${encodeURIComponent(query)}&limit=20&sort=market_cap:desc`,
+    `${BASE_URL}/tokens?search=${encodeURIComponent(query)}&limit=50&sort=market_cap:desc`,
   );
   if (!res.ok) throw new Error("Failed to fetch tokens");
   const json = await res.json();
-  const data: OdinToken[] = json.data ?? [];
-  // Sort by market_cap descending (highest first)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw: any[] = json.data ?? [];
+  // Normalize snake_case API fields (market_cap, holder_count) to the OdinToken interface fields
+  const data: OdinToken[] = raw.map((t) => ({
+    ...t,
+    marketcap: t.marketcap ?? t.market_cap ?? 0,
+    holder_count: t.holder_count ?? t.holders ?? undefined,
+  }));
+  // Sort by market cap descending (highest first)
   return data.sort((a, b) => (b.marketcap ?? 0) - (a.marketcap ?? 0));
 }
 
