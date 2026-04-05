@@ -14,6 +14,7 @@ import {
   Globe,
   RefreshCw,
   Send,
+  Star,
   TrendingUp,
   Twitter,
   Users,
@@ -32,6 +33,9 @@ import {
 import { TokenPriceChart } from "./TokenPriceChart";
 
 const ODIN_TOKEN_AMOUNT_DIVISOR = 100_000_000_000;
+const TOTAL_SUPPLY = 21_000_000;
+const HOLDERS_PAGE_SIZE = 100;
+const HOLDERS_MAX = 5000;
 
 interface TokenDetailModalProps {
   token: OdinToken | null;
@@ -62,6 +66,15 @@ interface TokenTrade {
   user_name?: string;
   receiver?: string;
   sender?: string;
+}
+
+interface TokenHolder {
+  user: string;
+  token: string;
+  balance: number;
+  user_username: string;
+  user_image: string;
+  tokenid: string;
 }
 
 function TokenInitials({ ticker }: { ticker: string }) {
@@ -140,6 +153,62 @@ function normalizeTelegram(handle: string): string {
   return `https://t.me/${clean}`;
 }
 
+/** Format holder balance */
+function formatHolderBalance(raw: number): string {
+  const amount = raw / ODIN_TOKEN_AMOUNT_DIVISOR;
+  if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(2)}M`;
+  if (amount >= 1_000) return `${(amount / 1_000).toFixed(2)}K`;
+  if (amount < 1 && amount > 0) return amount.toFixed(4);
+  return amount.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+/** Calculate percentage of total supply */
+function calcSupplyPct(balance: number): string {
+  const pct = (balance / ODIN_TOKEN_AMOUNT_DIVISOR / TOTAL_SUPPLY) * 100;
+  if (pct < 0.01) return "<0.01%";
+  return `${pct.toFixed(2)}%`;
+}
+
+/**
+ * Build the owners URL, trying different sort param styles.
+ * sortStyle 0 = sort=balance:desc, 1 = sort_by=balance&sort_order=desc, 2 = no sort
+ */
+function buildOwnersUrl(
+  tokenId: string,
+  page: number,
+  sortStyle: number,
+): string {
+  const base = `https://api.odin.fun/v1/token/${encodeURIComponent(tokenId)}/owners?page=${page}&limit=${HOLDERS_PAGE_SIZE}`;
+  if (sortStyle === 0) return `${base}&sort=balance:desc`;
+  if (sortStyle === 1) return `${base}&sort_by=balance&sort_order=desc`;
+  return base;
+}
+
+/** Extract holders array and total count from a raw API response */
+function extractHolderResponse(json: any): {
+  items: TokenHolder[];
+  total: number;
+} {
+  let items: TokenHolder[] = [];
+  let total = 0;
+
+  if (Array.isArray(json)) {
+    items = json as TokenHolder[];
+    total = json.length;
+  } else if (json && Array.isArray(json.data)) {
+    items = json.data as TokenHolder[];
+    total = typeof json.count === "number" ? json.count : json.data.length;
+  } else if (json && Array.isArray(json.items)) {
+    items = json.items as TokenHolder[];
+    total = typeof json.count === "number" ? json.count : json.items.length;
+  } else if (json && Array.isArray(json.holders)) {
+    items = json.holders as TokenHolder[];
+    total = typeof json.count === "number" ? json.count : json.holders.length;
+  }
+
+  return { items, total };
+}
+
 export function TokenDetailModal({
   token,
   open,
@@ -155,6 +224,12 @@ export function TokenDetailModal({
   // Full token detail (with social links) fetched from /token/{id}
   const [tokenDetail, setTokenDetail] = useState<OdinToken | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Holders state
+  const [holders, setHolders] = useState<TokenHolder[]>([]);
+  const [holdersLoading, setHoldersLoading] = useState(false);
+  const [holdersError, setHoldersError] = useState(false);
+  const [holdersTotalCount, setHoldersTotalCount] = useState(0);
 
   const { btcUsd } = useBtcPrice();
 
@@ -258,6 +333,82 @@ export function TokenDetailModal({
       });
   }, []);
 
+  /**
+   * Paginated holders fetch.
+   * - Tries sort=balance:desc first, falls back to sort_by/sort_order, then no sort.
+   * - Fetches page 1, reads total count, then fetches remaining pages sequentially.
+   * - On mid-pagination failure, shows whatever was collected so far.
+   * - Never shows the error state if we already have some data.
+   */
+  const fetchHolders = useCallback(async (tokenId: string) => {
+    setHoldersLoading(true);
+    setHoldersError(false);
+
+    // Try each sort style in order; stop as soon as page 1 succeeds
+    let sortStyle = 0;
+    let firstJson: any = null;
+
+    for (let s = 0; s <= 2; s++) {
+      try {
+        const url = buildOwnersUrl(tokenId, 1, s);
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const json = await res.json();
+        console.log(
+          `[Holders] page=1 sortStyle=${s} response:`,
+          JSON.stringify(json).slice(0, 500),
+        );
+        const { items } = extractHolderResponse(json);
+        if (items.length > 0 || s === 2) {
+          firstJson = json;
+          sortStyle = s;
+          break;
+        }
+      } catch {
+        // try next style
+      }
+    }
+
+    if (!firstJson) {
+      setHoldersError(true);
+      setHoldersLoading(false);
+      return;
+    }
+
+    const { items: firstPage, total } = extractHolderResponse(firstJson);
+    const allHolders: TokenHolder[] = [...firstPage];
+    setHoldersTotalCount(total);
+
+    // Calculate how many additional pages we need
+    const totalToFetch = Math.min(total, HOLDERS_MAX);
+    const totalPages = Math.ceil(totalToFetch / HOLDERS_PAGE_SIZE);
+
+    // Fetch remaining pages sequentially
+    if (totalPages > 1) {
+      for (let page = 2; page <= totalPages; page++) {
+        if (allHolders.length >= HOLDERS_MAX) break;
+        try {
+          const url = buildOwnersUrl(tokenId, page, sortStyle);
+          const res = await fetch(url);
+          if (!res.ok) break; // stop pagination but keep what we have
+          const json = await res.json();
+          const { items } = extractHolderResponse(json);
+          if (items.length === 0) break; // no more data
+          allHolders.push(...items);
+        } catch {
+          break; // stop pagination gracefully
+        }
+      }
+    }
+
+    // Trim to max and update state
+    const finalHolders = allHolders.slice(0, HOLDERS_MAX);
+    setHolders(finalHolders);
+    // If we didn't get total from API, use what we collected
+    if (!total) setHoldersTotalCount(finalHolders.length);
+    setHoldersLoading(false);
+  }, []);
+
   // Fetch token trades when feed tab is active + auto-refresh every 15s
   useEffect(() => {
     if (activeTab !== "feed" || !token) {
@@ -283,6 +434,13 @@ export function TokenDetailModal({
       }
     };
   }, [activeTab, token, fetchTrades]);
+
+  // Fetch holders when holders tab becomes active
+  useEffect(() => {
+    if (activeTab === "holders" && token) {
+      fetchHolders(token.id);
+    }
+  }, [activeTab, token, fetchHolders]);
 
   // Reset tab when modal opens
   useEffect(() => {
@@ -343,6 +501,22 @@ export function TokenDetailModal({
                   <p className="text-sm text-muted-foreground truncate">
                     {token.name}
                   </p>
+                  {/* Inline stats row: price + holders */}
+                  <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                    <span className="font-mono text-primary/90 font-semibold">
+                      {formatPriceAsSats(displayToken?.price ?? token.price)}
+                    </span>
+                    <span className="text-muted-foreground/40">·</span>
+                    <span className="flex items-center gap-1">
+                      <Users className="h-3 w-3 shrink-0" />
+                      <span className="font-medium text-foreground/70">
+                        {(
+                          displayToken?.holder_count ?? token.holder_count
+                        )?.toLocaleString() ?? "—"}
+                      </span>
+                      <span>holders</span>
+                    </span>
+                  </div>
                 </div>
                 <a
                   href={`https://odin.fun/token/${token.id}`}
@@ -385,6 +559,12 @@ export function TokenDetailModal({
                     className="flex-1 text-xs font-semibold"
                   >
                     Feed
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="holders"
+                    className="flex-1 text-xs font-semibold"
+                  >
+                    Holders
                   </TabsTrigger>
                 </TabsList>
 
@@ -721,6 +901,163 @@ export function TokenDetailModal({
                                 }`}
                               >
                                 {formatBtcWithUsd(btcAmt, btcUsd)}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </TabsContent>
+
+                {/* Holders tab */}
+                <TabsContent
+                  value="holders"
+                  className="flex-1 overflow-hidden px-5 py-4 mt-0 flex flex-col"
+                >
+                  {/* Holders header */}
+                  <div className="flex items-center justify-between mb-3 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        {holdersLoading
+                          ? "Loading holders…"
+                          : holders.length > 0
+                            ? `${holdersTotalCount.toLocaleString()} Holders (showing ${holders.length.toLocaleString()})`
+                            : "Holders"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => token && fetchHolders(token.id)}
+                      className="flex items-center gap-1 text-[10px] text-primary/70 hover:text-primary transition-colors"
+                      data-ocid="token_detail.secondary_button"
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      Refresh
+                    </button>
+                  </div>
+
+                  {/* Column headers */}
+                  {!holdersLoading && !holdersError && holders.length > 0 && (
+                    <div className="grid grid-cols-12 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 border-b border-border/50 mb-2 shrink-0">
+                      <span className="col-span-1">#</span>
+                      <span className="col-span-6">User</span>
+                      <span className="col-span-3 text-right">Balance</span>
+                      <span className="col-span-2 text-right">% Supply</span>
+                    </div>
+                  )}
+
+                  {holdersLoading ? (
+                    <div
+                      className="space-y-2"
+                      data-ocid="token_detail.loading_state"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map((k) => (
+                        <Skeleton key={k} className="h-10 w-full rounded-lg" />
+                      ))}
+                    </div>
+                  ) : holdersError ? (
+                    <div
+                      className="flex flex-col items-center gap-3 py-8"
+                      data-ocid="token_detail.error_state"
+                    >
+                      <p className="text-sm text-destructive">
+                        Failed to load holders
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => token && fetchHolders(token.id)}
+                        className="text-xs text-primary/70 hover:text-primary underline transition-colors"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  ) : holders.length === 0 ? (
+                    <div
+                      className="text-center py-8 text-sm text-muted-foreground"
+                      data-ocid="token_detail.empty_state"
+                    >
+                      No holders found
+                    </div>
+                  ) : (
+                    <div
+                      className="space-y-0.5 overflow-y-auto flex-1"
+                      data-ocid="token_detail.list"
+                    >
+                      {holders.map((holder, i) => {
+                        const rank = i + 1;
+                        const displayName = holder.user_username?.trim()
+                          ? holder.user_username.length > 18
+                            ? `${holder.user_username.slice(0, 12)}…${holder.user_username.slice(-4)}`
+                            : holder.user_username
+                          : abbreviatePrincipal(holder.user);
+
+                        // Gold/silver/bronze colors for top 3
+                        const rankColor =
+                          rank === 1
+                            ? "text-yellow-400"
+                            : rank === 2
+                              ? "text-slate-300"
+                              : rank === 3
+                                ? "text-amber-600"
+                                : "text-muted-foreground/50";
+
+                        return (
+                          <div
+                            key={`${holder.user}-${i}`}
+                            className="grid grid-cols-12 items-center py-2 px-1 rounded text-xs hover:bg-muted/20 transition-colors"
+                            data-ocid={`token_detail.item.${rank}`}
+                          >
+                            {/* Rank */}
+                            <div className="col-span-1 flex items-center gap-1">
+                              {rank <= 3 ? (
+                                <Star
+                                  className={`h-3 w-3 ${rankColor}`}
+                                  fill="currentColor"
+                                />
+                              ) : (
+                                <span
+                                  className={`font-mono text-[10px] ${rankColor}`}
+                                >
+                                  {rank}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* User */}
+                            <div className="col-span-6 flex items-center gap-2 min-w-0">
+                              <span
+                                className={`font-medium truncate ${
+                                  rank === 1
+                                    ? "text-yellow-400"
+                                    : rank === 2
+                                      ? "text-slate-300"
+                                      : rank === 3
+                                        ? "text-amber-600"
+                                        : "text-foreground/80"
+                                }`}
+                              >
+                                {displayName}
+                              </span>
+                            </div>
+
+                            {/* Balance */}
+                            <div className="col-span-3 text-right">
+                              <span className="font-mono text-foreground/90 font-semibold">
+                                {formatHolderBalance(holder.balance)}
+                              </span>
+                            </div>
+
+                            {/* % Supply */}
+                            <div className="col-span-2 text-right">
+                              <span
+                                className={`font-mono text-[11px] ${
+                                  rank <= 3
+                                    ? "text-primary/80"
+                                    : "text-muted-foreground"
+                                }`}
+                              >
+                                {calcSupplyPct(holder.balance)}
                               </span>
                             </div>
                           </div>
