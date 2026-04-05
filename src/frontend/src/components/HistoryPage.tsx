@@ -199,14 +199,12 @@ export function HistoryPage({
 
   const statusBadge = (status: TradeStatus) => {
     const map: Record<TradeStatus, string> = {
-      [TradeStatus.pending]: "bg-primary/15 text-primary",
-      [TradeStatus.completed]: "bg-success/15 text-success",
-      [TradeStatus.failed]: "bg-destructive/15 text-destructive",
+      [TradeStatus.pending]: "text-primary",
+      [TradeStatus.completed]: "text-success",
+      [TradeStatus.failed]: "text-destructive",
     };
     return (
-      <span
-        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${map[status]}`}
-      >
+      <span className={`text-[11px] font-semibold ${map[status]}`}>
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </span>
     );
@@ -379,10 +377,8 @@ export function HistoryPage({
                             )}
                             <span
                               className={[
-                                "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                                t.buy
-                                  ? "bg-success/15 text-success"
-                                  : "bg-destructive/15 text-destructive",
+                                "text-[11px] font-semibold",
+                                t.buy ? "text-success" : "text-destructive",
                               ].join(" ")}
                             >
                               {t.buy ? "BUY" : "SELL"}
@@ -521,10 +517,10 @@ export function HistoryPage({
                           )}
                           <span
                             className={[
-                              "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                              "text-[11px] font-semibold",
                               log.tradeType === "buy"
-                                ? "bg-success/15 text-success"
-                                : "bg-destructive/15 text-destructive",
+                                ? "text-success"
+                                : "text-destructive",
                             ].join(" ")}
                           >
                             {log.tradeType.toUpperCase()}
@@ -576,10 +572,8 @@ export function HistoryPage({
                 type="button"
                 onClick={() => setLiveActive((v) => !v)}
                 className={[
-                  "flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold transition-colors",
-                  liveActive
-                    ? "bg-success/15 text-success"
-                    : "bg-muted/40 text-muted-foreground",
+                  "flex items-center gap-1 text-[10px] font-semibold transition-colors",
+                  liveActive ? "text-success" : "text-muted-foreground",
                 ].join(" ")}
                 title={
                   liveActive
@@ -725,10 +719,8 @@ export function HistoryPage({
                             )}
                             <span
                               className={[
-                                "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                                t.buy
-                                  ? "bg-success/15 text-success"
-                                  : "bg-destructive/15 text-destructive",
+                                "text-[11px] font-semibold",
+                                t.buy ? "text-success" : "text-destructive",
                               ].join(" ")}
                             >
                               {t.buy ? "BUY" : "SELL"}

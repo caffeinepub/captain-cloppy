@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -336,7 +335,7 @@ export function TokenDetailModal({
                       </svg>
                     )}
                     {!token.bonded && (
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-400/10 text-amber-400 border border-amber-400/30">
+                      <span className="text-[10px] font-semibold text-amber-400">
                         Bonding
                       </span>
                     )}
@@ -412,12 +411,12 @@ export function TokenDetailModal({
                     </div>
                     {priceChange !== null && (
                       <div
-                        className={`flex items-center gap-1 text-sm font-bold rounded-full px-3 py-1 ${
+                        className={`flex items-center gap-1 text-sm font-bold ${
                           priceChange > 0
-                            ? "bg-emerald-500/10 text-emerald-400"
+                            ? "text-emerald-400"
                             : priceChange < 0
-                              ? "bg-red-500/10 text-red-400"
-                              : "bg-muted/40 text-muted-foreground"
+                              ? "text-red-400"
+                              : "text-muted-foreground"
                         }`}
                       >
                         <TrendingUp className="h-3.5 w-3.5" />
@@ -605,7 +604,7 @@ export function TokenDetailModal({
                         data-ocid="token_detail.secondary_button"
                       >
                         <RefreshCw className="h-3 w-3" />
-                        <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-1.5 py-0.5">
+                        <span className="text-[10px] font-medium text-emerald-400">
                           LIVE
                         </span>
                       </button>
@@ -681,16 +680,13 @@ export function TokenDetailModal({
                             {/* Row 1: badge + token amount + time */}
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <Badge
-                                  className={`text-[10px] px-1.5 py-0 font-bold shrink-0 ${
-                                    isBuy
-                                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                                      : "bg-red-500/15 text-red-400 border-red-500/30"
+                                <span
+                                  className={`text-[10px] font-bold shrink-0 ${
+                                    isBuy ? "text-emerald-400" : "text-red-400"
                                   }`}
-                                  variant="outline"
                                 >
                                   {isBuy ? "BUY" : "SELL"}
-                                </Badge>
+                                </span>
                                 <span className="font-mono font-semibold text-foreground">
                                   {formatTokenAmt(tokenAmt)}
                                 </span>

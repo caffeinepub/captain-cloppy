@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Activity,
@@ -141,10 +140,8 @@ function TrendingTokenCard({
         </div>
         {pct !== null && (
           <div
-            className={`flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-              isUp
-                ? "bg-emerald-500/10 text-emerald-400"
-                : "bg-red-500/10 text-red-400"
+            className={`flex items-center gap-0.5 text-[10px] font-bold ${
+              isUp ? "text-emerald-400" : "text-red-400"
             }`}
           >
             {isUp ? (
@@ -269,16 +266,13 @@ function LargeTransactionsFeed({
                 }`}
                 data-ocid={`dashboard.large-tx.item.${i + 1}`}
               >
-                <Badge
-                  variant="outline"
-                  className={`text-[9px] px-1.5 py-0 font-bold shrink-0 h-4 ${
-                    isBuy
-                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                      : "bg-red-500/15 text-red-400 border-red-500/30"
+                <span
+                  className={`text-[9px] font-bold shrink-0 ${
+                    isBuy ? "text-emerald-400" : "text-red-400"
                   }`}
                 >
                   {isBuy ? "BUY" : "SELL"}
-                </Badge>
+                </span>
 
                 <button
                   type="button"
@@ -297,7 +291,7 @@ function LargeTransactionsFeed({
                   {formatBtcWithUsd(btcAmt, btcUsd)}
                 </span>
 
-                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+                <span className="text-[9px] font-bold text-amber-400 shrink-0">
                   $
                   {usdVal >= 1_000
                     ? `${(usdVal / 1_000).toFixed(1)}K`
@@ -438,16 +432,13 @@ function GlobalFeedMini({
                   className="flex items-center gap-2 rounded-lg bg-muted/20 border border-border/40 px-3 py-2 hover:bg-muted/40 transition-colors"
                   data-ocid={`dashboard.feed.item.${i + 1}`}
                 >
-                  <Badge
-                    variant="outline"
-                    className={`text-[9px] px-1.5 py-0 font-bold shrink-0 h-4 ${
-                      isBuy
-                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                        : "bg-red-500/15 text-red-400 border-red-500/30"
+                  <span
+                    className={`text-[9px] font-bold shrink-0 ${
+                      isBuy ? "text-emerald-400" : "text-red-400"
                     }`}
                   >
                     {isBuy ? "BUY" : "SELL"}
-                  </Badge>
+                  </span>
 
                   <button
                     type="button"
