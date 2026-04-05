@@ -1481,73 +1481,64 @@ export function ProfilePage({
                   <div
                     key={t.id}
                     data-ocid={`profile.history.item.${i + 1}`}
-                    className={`px-4 py-3.5 hover:bg-muted/30 transition-colors ${t.buy ? "border-l-2 border-success/40" : "border-l-2 border-destructive/40"}`}
+                    className={`px-3 py-2 hover:bg-muted/30 transition-colors ${t.buy ? "border-l-2 border-success/50" : "border-l-2 border-destructive/50"}`}
                   >
-                    {/* Row 1: Logo + ticker + badge + value */}
+                    {/* Line 1: logo · ticker · bonded · BUY/SELL · BTC value · time */}
                     <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         {t.token_id && (
                           <img
                             src={`https://api.odin.fun/v1/token/${t.token_id}/image`}
                             alt={ticker}
-                            className="rounded-full shrink-0 object-cover bg-muted w-7 h-7 ring-1 ring-border/40"
+                            className="rounded-full shrink-0 object-cover bg-muted w-5 h-5"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display =
                                 "none";
                             }}
                           />
                         )}
-                        <div className="flex items-center gap-1 min-w-0">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              t.token_id && handleOpenTokenDetail(t.token_id)
-                            }
-                            className="text-sm font-semibold text-primary hover:underline cursor-pointer transition-colors truncate"
-                            disabled={!t.token_id}
-                          >
-                            {ticker}
-                          </button>
-                          {t.bonded && <BondedCheck />}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            t.token_id && handleOpenTokenDetail(t.token_id)
+                          }
+                          className="text-xs font-bold text-primary hover:underline cursor-pointer transition-colors truncate"
+                          disabled={!t.token_id}
+                        >
+                          {ticker}
+                        </button>
+                        {t.bonded && <BondedCheck />}
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            t.buy
-                              ? "bg-success/15 text-success"
-                              : "bg-destructive/15 text-destructive"
-                          }`}
+                          className={`text-[10px] font-bold ${t.buy ? "text-success" : "text-destructive"}`}
                         >
                           {t.buy ? "BUY" : "SELL"}
                         </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
                         <span className="font-mono text-xs text-foreground">
                           {formatBtcWithUsd(t.amount_btc, btcUsd)}
                         </span>
+                        <span className="text-[10px] text-muted-foreground/60">
+                          {formatRelativeTime(t.time)}
+                        </span>
                       </div>
                     </div>
-                    {/* Row 2: Date · relative time */}
-                    <div className="flex items-center gap-1 mt-1.5 pl-9">
-                      <span className="text-[11px] text-muted-foreground">
-                        {formatDate(t.time)}
-                      </span>
-                      <span className="text-[11px] text-muted-foreground/50">
-                        ·
-                      </span>
-                      <span className="text-[11px] text-muted-foreground/60">
-                        {formatRelativeTime(t.time)}
-                      </span>
-                    </div>
-                    {/* Row 3: Amount @ price */}
-                    <div className="flex items-center gap-1.5 mt-0.5 pl-9">
-                      <span className="text-[11px] text-muted-foreground">
+                    {/* Line 2: amount @ price · date */}
+                    <div className="flex items-center gap-1 mt-0.5 ml-6">
+                      <span className="text-[10px] text-muted-foreground">
                         {formatTokenAmount(t.amount_token)}
                       </span>
-                      <span className="text-[11px] text-muted-foreground/40">
+                      <span className="text-[10px] text-muted-foreground/40">
                         @
                       </span>
-                      <span className="text-[11px] text-primary font-mono">
+                      <span className="text-[10px] text-primary/70 font-mono">
                         {formatPriceAsSats(t.price)}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground/40 mx-0.5">
+                        ·
+                      </span>
+                      <span className="text-[10px] text-muted-foreground/50">
+                        {formatDate(t.time)}
                       </span>
                     </div>
                   </div>
