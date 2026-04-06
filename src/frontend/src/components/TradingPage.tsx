@@ -58,6 +58,39 @@ const SELL_PRESETS = [
   { label: "MAX", value: 1.0 },
 ];
 
+// AMM constants — defined outside component to avoid re-creation on every render
+const TOKEN_AMM_DIVISOR = 100_000_000_000; // raw token units
+
+// AMM constant product: tokens received when buying with BTC
+// btcReserve and tokenReserve are raw API values (milli-sats and raw token units)
+// btcInBtc is in BTC (float)
+function calcAmmBuyTokens(
+  btcInBtc: number,
+  btcReserveMilliSats: number,
+  tokenReserveRaw: number,
+): number {
+  if (btcReserveMilliSats <= 0 || tokenReserveRaw <= 0) return 0;
+  // Convert btcIn to milli-sats (same unit as btc_liquidity from API)
+  const btcInMilliSats = btcInBtc * 100_000_000 * 1000;
+  const tokensOutRaw =
+    (tokenReserveRaw * btcInMilliSats) / (btcReserveMilliSats + btcInMilliSats);
+  return tokensOutRaw / TOKEN_AMM_DIVISOR;
+}
+
+// AMM constant product: BTC received when selling tokens
+// tokenInDisplay is display amount (float, e.g. 8500000)
+function calcAmmSellBtc(
+  tokenInDisplay: number,
+  btcReserveMilliSats: number,
+  tokenReserveRaw: number,
+): number {
+  if (btcReserveMilliSats <= 0 || tokenReserveRaw <= 0) return 0;
+  const tokenInRaw = tokenInDisplay * TOKEN_AMM_DIVISOR;
+  const btcOutMilliSats =
+    (btcReserveMilliSats * tokenInRaw) / (tokenReserveRaw + tokenInRaw);
+  return btcOutMilliSats / 1000 / 100_000_000; // convert to BTC
+}
+
 function formatUsd(usd: number): string {
   if (usd === 0) return "$0";
   if (usd < 0.01) return `$${usd.toFixed(6)}`;
@@ -293,6 +326,12 @@ export function TradingPage({
   const [showChart, setShowChart] = useState(true);
   const [slippageOpen, setSlippageOpen] = useState(false);
 
+  // AMM liquidity data for accurate token amount estimation
+  const [tokenDetail, setTokenDetail] = useState<{
+    btc_liquidity: number;
+    token_liquidity: number;
+  } | null>(null);
+
   const addTradeLog = useAddTradeLog();
   const initialTokenRef = useRef(initialToken);
   const { btcUsd } = useBtcPrice();
@@ -320,6 +359,26 @@ export function TradingPage({
       // Auto-select the top token if no initialToken was provided
       if (!initialTokenRef.current && raw.length > 0) {
         setSelectedToken(raw[0]);
+        // Fetch liquidity detail for the auto-selected token
+        try {
+          const detailRes = await fetch(
+            `https://api.odin.fun/v1/token/${raw[0].id}`,
+          );
+          if (detailRes.ok) {
+            const detailData = await detailRes.json();
+            if (
+              detailData.btc_liquidity != null &&
+              detailData.token_liquidity != null
+            ) {
+              setTokenDetail({
+                btc_liquidity: detailData.btc_liquidity,
+                token_liquidity: Number(detailData.token_liquidity),
+              });
+            }
+          }
+        } catch {
+          /* ignore */
+        }
       }
     } catch {
       setTokens([]);
@@ -336,13 +395,41 @@ export function TradingPage({
     if (initialToken && initialToken.id !== initialTokenRef.current?.id) {
       initialTokenRef.current = initialToken;
       setSelectedToken(initialToken);
+      setTokenDetail(null);
+      // Fetch liquidity for the new initialToken
+      fetch(`https://api.odin.fun/v1/token/${initialToken.id}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.btc_liquidity != null && data?.token_liquidity != null) {
+            setTokenDetail({
+              btc_liquidity: data.btc_liquidity,
+              token_liquidity: Number(data.token_liquidity),
+            });
+          }
+        })
+        .catch(() => {});
     }
   }, [initialToken]);
 
-  const handleSelectToken = useCallback((token: OdinToken) => {
+  const handleSelectToken = useCallback(async (token: OdinToken) => {
     setSelectedToken(token);
     setBtcAmount("");
     setTokenAmount("");
+    setTokenDetail(null);
+    try {
+      const res = await fetch(`https://api.odin.fun/v1/token/${token.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.btc_liquidity != null && data.token_liquidity != null) {
+          setTokenDetail({
+            btc_liquidity: data.btc_liquidity,
+            token_liquidity: Number(data.token_liquidity),
+          });
+        }
+      }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   // suppress unused warning — kept for potential future use
@@ -360,22 +447,48 @@ export function TradingPage({
       ? priceInBtcPerToken * btcUsdSafe
       : 0;
 
-  // Two-way sync: btcAmount changes -> update tokenAmount
+  // Two-way sync: btcAmount changes -> update tokenAmount using AMM formula
   const handleBtcAmountChange = (val: string) => {
     setBtcAmount(val);
-    if (val && priceInBtcPerToken > 0 && !Number.isNaN(Number(val))) {
-      const toks = Number(val) / priceInBtcPerToken;
+    if (val && !Number.isNaN(Number(val)) && Number(val) > 0) {
+      let toks = 0;
+      if (
+        tokenDetail &&
+        tokenDetail.btc_liquidity > 0 &&
+        tokenDetail.token_liquidity > 0
+      ) {
+        toks = calcAmmBuyTokens(
+          Number(val),
+          tokenDetail.btc_liquidity,
+          tokenDetail.token_liquidity,
+        );
+      } else if (priceInBtcPerToken > 0) {
+        toks = Number(val) / priceInBtcPerToken;
+      }
       setTokenAmount(toks > 0 ? toks.toFixed(2) : "");
     } else {
       setTokenAmount("");
     }
   };
 
-  // Two-way sync: tokenAmount changes -> update btcAmount
+  // Two-way sync: tokenAmount changes -> update btcAmount using AMM inverse
   const handleTokenAmountChange = (val: string) => {
     setTokenAmount(val);
-    if (val && priceInBtcPerToken > 0 && !Number.isNaN(Number(val))) {
-      const btc = Number(val) * priceInBtcPerToken;
+    if (val && !Number.isNaN(Number(val)) && Number(val) > 0) {
+      let btc = 0;
+      if (
+        tokenDetail &&
+        tokenDetail.btc_liquidity > 0 &&
+        tokenDetail.token_liquidity > 0
+      ) {
+        btc = calcAmmSellBtc(
+          Number(val),
+          tokenDetail.btc_liquidity,
+          tokenDetail.token_liquidity,
+        );
+      } else if (priceInBtcPerToken > 0) {
+        btc = Number(val) * priceInBtcPerToken;
+      }
       setBtcAmount(btc > 0 ? btc.toFixed(8) : "");
     } else {
       setBtcAmount("");
@@ -392,11 +505,31 @@ export function TradingPage({
     handleTokenAmountChange(String(Math.round(tokenAmt)));
   };
 
-  // Price impact calculation
+  // AMM-based price impact calculation
   const priceImpact = (() => {
     if (!selectedToken || !btcAmount) return null;
     const orderBtc = Number(btcAmount);
     if (Number.isNaN(orderBtc) || orderBtc <= 0) return null;
+
+    // Use AMM-based price impact if liquidity data available
+    if (
+      tokenDetail &&
+      tokenDetail.btc_liquidity > 0 &&
+      tokenDetail.token_liquidity > 0
+    ) {
+      const btcReserve = tokenDetail.btc_liquidity; // milli-sats
+      const tokenReserve = tokenDetail.token_liquidity; // raw
+      const btcInMilliSats = orderBtc * 100_000_000 * 1000;
+      const priceBefore = btcReserve / tokenReserve;
+      const tokensOut =
+        (tokenReserve * btcInMilliSats) / (btcReserve + btcInMilliSats);
+      const priceAfter =
+        (btcReserve + btcInMilliSats) / (tokenReserve - tokensOut);
+      const impact = ((priceAfter - priceBefore) / priceBefore) * 100;
+      return Math.min(impact, 99);
+    }
+
+    // Fallback: use market cap estimate
     const mcapInBtc = selectedToken.marketcap
       ? selectedToken.marketcap / 1000 / SATS_PER_BTC
       : null;

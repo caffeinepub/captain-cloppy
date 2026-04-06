@@ -1,20 +1,38 @@
 # Captain Cloppy
 
 ## Current State
-Halaman Trading sudah memiliki Jupiter-style layout dengan chart, form buy/sell, dan recent trades. Token selector bisa search by ticker dengan dropdown.
+Halaman Trading menggunakan kalkulasi linear sederhana `BTC ÷ price_per_token` untuk memperkirakan jumlah token yang diterima. Ini menghasilkan angka yang jauh berbeda dari Odin.fun karena Odin.fun menggunakan **AMM constant product bonding curve** (`x * y = k`).
+
+Contoh perbedaan:
+- 0.1 BTC → di Odin.fun: 8.5M token
+- 0.1 BTC → di platform kita: 25,252,525 token (salah ~3x lebih besar)
 
 ## Requested Changes (Diff)
 
 ### Add
-- (none)
+- State `tokenDetail` untuk menyimpan data detail token (btc_liquidity, token_liquidity) dari API `/v1/token/{id}`
+- Fungsi AMM helper `calcAmmBuyTokens(btcIn, btcReserve, tokenReserve)` dan `calcAmmSellBtc(tokenIn, btcReserve, tokenReserve)` menggunakan formula constant product
+- Fetch token detail saat token dipilih atau auto-loaded
 
 ### Modify
-- **Bug fix: Token selector search** -- Saat user mengetik ticker lalu memilih token dari dropdown, `handleSelectToken` men-set `query` ke `token.ticker` yang memicu `useEffect` untuk jalankan `doSearch` lagi. Ini menyebabkan dropdown muncul kembali dan data yang ditampilkan tidak konsisten. Fix: setelah token dipilih, skip doSearch dengan flag atau dengan cara tidak trigger search saat query-nya sama persis dengan selectedToken.ticker.
-- **Remove USD display di trade form** -- `tokenAmountUsd` ditampilkan di bawah input "You Receive" sebagai `~$X.XX`. User meminta ini dihapus dari area Trading.
+- `handleBtcAmountChange`: gunakan AMM formula jika btc_liquidity & token_liquidity tersedia, fallback ke linear jika tidak
+- `handleTokenAmountChange`: gunakan AMM formula inverse jika data tersedia
+- `priceImpact`: hitung menggunakan AMM (harga sebelum vs sesudah trade) bukan perkiraan market cap
+- handleSelectToken: fetch detail token setelah select
 
 ### Remove
-- USD display di bagian "You Receive" di trade form
+- Tidak ada yang dihapus
 
 ## Implementation Plan
-1. Tambahkan `skipNextSearch` ref boolean -- di `handleSelectToken`, set ref ini ke `true`. Di `useEffect` yang watch query, cek ref ini dan skip `doSearch` jika true, lalu reset ke false.
-2. Hapus rendering `{tokenAmountUsd && isBuy && ...}` dari bagian bottom input di TradeForm.
+1. Tambah state `tokenDetail` dengan `btc_liquidity` dan `token_liquidity`
+2. Buat helper AMM:
+   - BUY: `tokens_out = (token_liquidity_raw * btc_in_raw) / (btc_liquidity_raw + btc_in_raw)` — lalu bagi dengan TOKEN_DIVISOR
+   - SELL: `btc_out = (btc_liquidity_raw * token_in_raw) / (token_liquidity_raw + token_in_raw)` — lalu bagi dengan SATS_PER_BTC
+3. Fetch token detail (GET /v1/token/{id}) setelah auto-select dan handleSelectToken
+4. Gunakan AMM helper di handleBtcAmountChange dan handleTokenAmountChange
+5. Update price impact calculation berdasarkan harga sebelum dan sesudah AMM trade
+
+## Notes
+- `btc_liquidity` dari API adalah integer dalam milli-satoshi (bagi 1000 untuk sats, bagi lagi 100,000,000 untuk BTC)
+- `token_liquidity` dari API adalah decimal dalam unit token raw (bagi 100,000,000,000 untuk display)
+- TOKEN_DIVISOR = 100_000_000_000 (sesuai konvensi Odin.fun)
