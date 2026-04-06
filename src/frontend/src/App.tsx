@@ -3,6 +3,7 @@ import {
   Compass,
   History,
   LayoutDashboard,
+  Loader2,
   Menu,
   Settings,
   TrendingUp,
@@ -68,11 +69,33 @@ export default function App() {
     undefined,
   );
   const [viewedTraderPrincipal, setViewedTraderPrincipal] = useState("");
+  const [connectError, setConnectError] = useState("");
 
-  const { principal, setManualPrincipal } = useSiwbAuth();
+  const {
+    principal,
+    status,
+    btcAddress,
+    connectWallet,
+    disconnect,
+    setManualPrincipal,
+  } = useSiwbAuth();
 
   const handleConnected = (p: string) => {
     setManualPrincipal(p);
+  };
+
+  const handleOkxConnect = async () => {
+    setConnectError("");
+    try {
+      await connectWallet("okx");
+    } catch (err: any) {
+      setConnectError(err?.message ?? "Failed to connect OKX wallet");
+      setTimeout(() => setConnectError(""), 4000);
+    }
+  };
+
+  const handleOkxDisconnect = () => {
+    disconnect();
   };
 
   const handleSelectToken = (token: OdinToken) => {
@@ -83,7 +106,6 @@ export default function App() {
   const handleNavigate = (p: NavPage) => {
     setPage(p);
     setSidebarOpen(false);
-    // Reset viewed trader when navigating via sidebar/nav
     setViewedTraderPrincipal("");
   };
 
@@ -94,9 +116,19 @@ export default function App() {
 
   const { title, subtitle, short } = PAGE_TITLES[page];
 
+  const isConnected = status === "connected" && !!principal;
+  const isConnecting = status === "connecting";
+
+  // Short display of address or principal
+  const connectedLabel = btcAddress
+    ? `${btcAddress.slice(0, 6)}...${btcAddress.slice(-4)}`
+    : principal
+      ? `${principal.slice(0, 6)}...${principal.slice(-4)}`
+      : "";
+
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Backdrop overlay — mobile only (button for a11y) */}
+      {/* Backdrop overlay — mobile only */}
       {sidebarOpen && (
         <button
           type="button"
@@ -129,7 +161,6 @@ export default function App() {
               <Menu className="h-4 w-4" />
             </button>
             <div className="min-w-0">
-              {/* Full title on md+, short on mobile */}
               <h1 className="text-base font-bold text-foreground tracking-tight leading-tight truncate">
                 <span className="hidden md:inline">{title}</span>
                 <span className="md:hidden">{short}</span>
@@ -141,6 +172,61 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* OKX Wallet Connect Button */}
+            {isConnected ? (
+              <button
+                type="button"
+                onClick={handleOkxDisconnect}
+                className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-green-500/40 bg-green-500/10 text-green-400 text-xs font-semibold hover:bg-green-500/20 hover:border-green-500/60 transition-colors"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-green-400 shrink-0" />
+                <span className="hidden sm:inline">{connectedLabel}</span>
+                <span className="sm:hidden">OKX</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleOkxConnect}
+                disabled={isConnecting}
+                className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-muted/40 text-foreground text-xs font-semibold hover:bg-muted hover:border-primary/50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isConnecting ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 32 32"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M12.267 12.267H19.733V19.733H12.267V12.267Z"
+                      fill="currentColor"
+                    />
+                    <path
+                      d="M4.8 4.8H12.267V12.267H4.8V4.8Z"
+                      fill="currentColor"
+                    />
+                    <path
+                      d="M19.733 4.8H27.2V12.267H19.733V4.8Z"
+                      fill="currentColor"
+                    />
+                    <path
+                      d="M4.8 19.733H12.267V27.2H4.8V19.733Z"
+                      fill="currentColor"
+                    />
+                    <path
+                      d="M19.733 19.733H27.2V27.2H19.733V19.733Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                )}
+                Connect OKX
+              </button>
+            )}
+
             <button
               type="button"
               data-ocid="header.settings.button"
@@ -151,6 +237,13 @@ export default function App() {
             </button>
           </div>
         </header>
+
+        {/* Connect error toast */}
+        {connectError && (
+          <div className="mx-4 mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive">
+            {connectError}
+          </div>
+        )}
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 md:pb-6">

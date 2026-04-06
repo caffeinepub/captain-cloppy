@@ -60,6 +60,7 @@ const SELL_PRESETS = [
 
 // AMM constants — defined outside component to avoid re-creation on every render
 const TOKEN_AMM_DIVISOR = 100_000_000_000; // raw token units
+const SWAP_FEE_RATE = 0.01; // 1% swap fee, matching Odin.fun
 
 // AMM constant product: tokens received when buying with BTC
 // btcReserve and tokenReserve are raw API values (milli-sats and raw token units)
@@ -71,7 +72,8 @@ function calcAmmBuyTokens(
 ): number {
   if (btcReserveMilliSats <= 0 || tokenReserveRaw <= 0) return 0;
   // Convert btcIn to milli-sats (same unit as btc_liquidity from API)
-  const btcInMilliSats = btcInBtc * 100_000_000 * 1000;
+  // Apply 1% swap fee: only (1 - fee) of the input enters the AMM pool
+  const btcInMilliSats = btcInBtc * 100_000_000 * 1000 * (1 - SWAP_FEE_RATE);
   const tokensOutRaw =
     (tokenReserveRaw * btcInMilliSats) / (btcReserveMilliSats + btcInMilliSats);
   return tokensOutRaw / TOKEN_AMM_DIVISOR;
@@ -85,7 +87,8 @@ function calcAmmSellBtc(
   tokenReserveRaw: number,
 ): number {
   if (btcReserveMilliSats <= 0 || tokenReserveRaw <= 0) return 0;
-  const tokenInRaw = tokenInDisplay * TOKEN_AMM_DIVISOR;
+  // Apply 1% swap fee: only (1 - fee) of the token input enters the AMM pool
+  const tokenInRaw = tokenInDisplay * TOKEN_AMM_DIVISOR * (1 - SWAP_FEE_RATE);
   const btcOutMilliSats =
     (btcReserveMilliSats * tokenInRaw) / (tokenReserveRaw + tokenInRaw);
   return btcOutMilliSats / 1000 / 100_000_000; // convert to BTC
@@ -573,6 +576,22 @@ export function TradingPage({
     return btc * btcUsdSafe;
   })();
 
+  // Swap fee (1% of the input value)
+  const swapFeeUsd = (() => {
+    if (!btcUsdSafe) return null;
+    const isBuy = tradeType === "buy";
+    if (isBuy) {
+      const btc = Number(btcAmount);
+      if (!btcAmount || Number.isNaN(btc) || btc <= 0) return null;
+      return btc * SWAP_FEE_RATE * btcUsdSafe;
+    }
+    // Sell: fee on the token amount expressed in USD
+    const toks = Number(tokenAmount);
+    if (!tokenAmount || Number.isNaN(toks) || toks <= 0 || tokenUsdPrice <= 0)
+      return null;
+    return toks * tokenUsdPrice * SWAP_FEE_RATE;
+  })();
+
   const handlePlaceOrder = async () => {
     if (!principal || !selectedToken) return;
     const orderAmount =
@@ -978,6 +997,21 @@ export function TradingPage({
                 </button>
               ))}
         </div>
+
+        {/* Swap fee row */}
+        {swapFeeUsd !== null && (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Swap Fee</span>
+              <span className="text-xs font-semibold text-muted-foreground">
+                1%
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {formatUsd(swapFeeUsd)}
+            </span>
+          </div>
+        )}
 
         {/* Price impact + slippage settings row */}
         <div className="flex items-center justify-between">
