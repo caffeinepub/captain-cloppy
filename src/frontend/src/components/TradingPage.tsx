@@ -12,9 +12,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowDownUp,
   ChevronDown,
+  Coins,
   Loader2,
   RefreshCw,
-  Search,
   Settings2,
   TrendingDown,
   TrendingUp,
@@ -33,7 +33,6 @@ import {
   formatMcapAsUsd,
   formatPriceAsSats,
   getTokenImageUrl,
-  searchTokens,
 } from "../lib/odinApi";
 import { TokenPriceChart } from "./TokenPriceChart";
 
@@ -277,16 +276,14 @@ export function TradingPage({
   onSetPrincipal: _onSetPrincipal,
   initialToken,
 }: TradingPageProps) {
-  // Token search state
-  const [query, setQuery] = useState(initialToken?.ticker ?? "");
+  // Token state
   const [tokens, setTokens] = useState<OdinToken[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
+  const [tokensLoading, setTokensLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedToken, setSelectedToken] = useState<OdinToken | null>(
     initialToken ?? null,
   );
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const skipNextSearch = useRef(false);
 
   // Trade form state
   const [tradeType, setTradeType] = useState<"buy" | "sell">("buy");
@@ -300,17 +297,16 @@ export function TradingPage({
   const [showChart, setShowChart] = useState(true);
   const [slippageOpen, setSlippageOpen] = useState(false);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const addTradeLog = useAddTradeLog();
   const initialTokenRef = useRef(initialToken);
   const { btcUsd } = useBtcPrice();
   const btcUsdSafe = btcUsd ?? 0;
 
   // -----------------------------------------------------------------------
-  // Load top tokens by market cap (for empty-query state)
+  // Load top tokens by market cap
   // -----------------------------------------------------------------------
   const loadTopTokens = useCallback(async () => {
-    setSearchLoading(true);
+    setTokensLoading(true);
     try {
       const res = await fetch(
         "https://api.odin.fun/v1/tokens?limit=30&sort=market_cap:desc",
@@ -330,40 +326,15 @@ export function TradingPage({
     } catch {
       setTokens([]);
     } finally {
-      setSearchLoading(false);
+      setTokensLoading(false);
     }
   }, []);
-
-  // -----------------------------------------------------------------------
-  // Search tokens
-  // -----------------------------------------------------------------------
-  const doSearch = useCallback(
-    async (q: string) => {
-      if (!q.trim()) {
-        loadTopTokens();
-        return;
-      }
-      setSearchLoading(true);
-      try {
-        const results = await searchTokens(q);
-        setTokens(results);
-        setShowDropdown(true);
-      } catch {
-        setTokens([]);
-      } finally {
-        setSearchLoading(false);
-      }
-    },
-    [loadTopTokens],
-  );
 
   // Sync initialToken
   useEffect(() => {
     if (initialToken && initialToken.id !== initialTokenRef.current?.id) {
       initialTokenRef.current = initialToken;
       setSelectedToken(initialToken);
-      skipNextSearch.current = true;
-      setQuery(initialToken.ticker);
       setShowDropdown(false);
     }
   }, [initialToken]);
@@ -382,31 +353,8 @@ export function TradingPage({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Debounced search on query change
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      if (skipNextSearch.current) {
-        skipNextSearch.current = false;
-        return;
-      }
-      if (showDropdown) {
-        doSearch(query);
-      }
-    }, 400);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query, doSearch, showDropdown]);
-
   const handleSelectToken = useCallback((token: OdinToken) => {
-    // Set flag to ignore next debounced search triggered by query change
-    skipNextSearch.current = true;
-    // Clear any pending debounce immediately
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    // Update all state atomically
     setSelectedToken(token);
-    setQuery(token.ticker);
     setShowDropdown(false);
     setBtcAmount("");
     setTokenAmount("");
@@ -559,10 +507,7 @@ export function TradingPage({
       data-ocid="trading.token_select.button"
       onClick={() => {
         if (!showDropdown) {
-          setShowDropdown(true);
-          if (!query.trim()) {
-            loadTopTokens();
-          }
+          loadTopTokens();
         } else {
           setShowDropdown(false);
         }
@@ -608,7 +553,7 @@ export function TradingPage({
       ) : (
         <>
           <div className="h-8 w-8 shrink-0 rounded-full bg-muted/50 flex items-center justify-center">
-            <Search className="h-4 w-4 text-muted-foreground" />
+            <Coins className="h-4 w-4 text-muted-foreground" />
           </div>
           <span className="flex-1 text-left text-sm text-muted-foreground">
             Select a token
@@ -624,29 +569,19 @@ export function TradingPage({
   // -----------------------------------------------------------------------
   const TokenSelectorDropdown = showDropdown && (
     <div className="absolute z-50 left-0 right-0 top-[calc(100%+4px)] rounded-xl border border-border bg-popover shadow-xl overflow-hidden">
-      <div className="p-2 border-b border-border">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            autoFocus
-            data-ocid="trading.search_input"
-            placeholder="Search by ticker or name..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="pl-8 h-8 text-sm bg-muted/40 border-border"
-          />
-          {searchLoading && (
-            <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
-          )}
-        </div>
-      </div>
       <div
         className="max-h-56 overflow-y-auto"
         data-ocid="trading.token.dropdown_menu"
       >
-        {tokens.length === 0 && !searchLoading && (
+        {tokens.length === 0 && tokensLoading && (
+          <div className="p-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading tokens...
+          </div>
+        )}
+        {tokens.length === 0 && !tokensLoading && (
           <p className="p-4 text-center text-sm text-muted-foreground">
-            {query.trim() ? "No tokens found" : "Loading tokens..."}
+            No tokens found
           </p>
         )}
         {tokens.map((token) => {
@@ -1232,7 +1167,7 @@ export function TradingPage({
               />
             ) : (
               <div className="h-[300px] flex flex-col items-center justify-center gap-3 text-center">
-                <Search className="h-10 w-10 text-muted-foreground/30" />
+                <Coins className="h-10 w-10 text-muted-foreground/30" />
                 <p className="text-sm text-muted-foreground">
                   Select a token to view chart
                 </p>
