@@ -1287,7 +1287,7 @@ export function ProfilePage({
                             <button
                               type="button"
                               onClick={() => handleOpenTokenDetail(item.id)}
-                              className="text-xs font-semibold text-primary hover:underline cursor-pointer truncate"
+                              className="text-xs font-semibold text-white hover:text-white/80 hover:underline cursor-pointer truncate"
                             >
                               {item.ticker}
                             </button>
@@ -1356,7 +1356,7 @@ export function ProfilePage({
                               <button
                                 type="button"
                                 onClick={() => handleOpenTokenDetail(item.id)}
-                                className="font-semibold text-primary hover:underline cursor-pointer"
+                                className="font-semibold text-white hover:text-white/80 hover:underline cursor-pointer"
                               >
                                 {item.ticker}
                               </button>
@@ -1502,7 +1502,7 @@ export function ProfilePage({
                           onClick={() =>
                             t.token_id && handleOpenTokenDetail(t.token_id)
                           }
-                          className="text-xs font-bold text-primary hover:underline cursor-pointer transition-colors truncate"
+                          className="text-xs font-bold text-white hover:text-white/80 hover:underline cursor-pointer transition-colors truncate"
                           disabled={!t.token_id}
                         >
                           {ticker}

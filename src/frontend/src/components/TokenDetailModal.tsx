@@ -893,7 +893,7 @@ export function TokenDetailModal({
                                         trade.user || username,
                                       )
                                     }
-                                    className="text-muted-foreground/70 hover:text-primary hover:underline transition-colors cursor-pointer text-left"
+                                    className="text-blue-400 hover:text-blue-300 hover:underline transition-colors cursor-pointer text-left"
                                   >
                                     {username ||
                                       abbreviatePrincipal(trade.user)}
@@ -1040,14 +1040,14 @@ export function TokenDetailModal({
                                 onClick={() =>
                                   onViewTraderProfile?.(holder.user)
                                 }
-                                className={`font-medium truncate hover:underline hover:text-primary transition-colors cursor-pointer text-left ${
+                                className={`font-medium truncate hover:underline hover:text-blue-300 transition-colors cursor-pointer text-left ${
                                   rank === 1
                                     ? "text-yellow-400"
                                     : rank === 2
                                       ? "text-slate-300"
                                       : rank === 3
                                         ? "text-amber-600"
-                                        : "text-foreground/80"
+                                        : "text-blue-400"
                                 }`}
                               >
                                 {displayName}

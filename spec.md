@@ -1,32 +1,49 @@
-# Captain Cloppy
+# Captain Cloppy – Trading Page Jupiter-Style Upgrade
 
 ## Current State
-Dashboard shows: Large Transactions, Hot Tokens grid, Mini Global Feed. No platform-wide stats section exists.
+The Trading page (`TradingPage.tsx`) is a basic 2-column layout:
+- Left column: token search dropdown + token info card (price, market cap)
+- Right column: Buy/Sell tabs, amount input, slippage settings, estimated output, CTA button
+- Order types exist (Market, Limit, Recurring) but are not yet implemented in the UI
+- No token price chart inline on trading page
+- No recent trades feed for selected token
+- No order book / depth view
+- No price impact display
+- No two-way synced input (BTC ↔ Token amount)
 
 ## Requested Changes (Diff)
 
 ### Add
-- `PlatformStatsSection` component in `DashboardPage.tsx` that fetches `GET https://api.odin.fun/v1/statistics/dashboard` and displays:
-  - 4 stat cards: Total Tokens, Bonded Tokens, Total Users, Total Liquidity (USD)
-  - All-time Volume (USD) and 24h Volume (USD) as additional stats
-  - A 30-day trading volume bar chart using `trades_30d` data (dates + volume in milli-sats converted to USD)
-- This section is placed **between the Header and Large Transactions** (i.e., at the very top of the dashboard content)
-- Auto-refresh every 60 seconds
-- Skeleton loading states while data is being fetched
+- **Inline price chart** for the selected token (candlestick/line chart using real candle data from Odin API) displayed prominently in the trading layout (left side on desktop, top on mobile)
+- **Market / Limit / Recurring order type tabs** above the Buy/Sell tabs — Market (immediate), Limit (set target price), Recurring (DCA interval)
+- **Limit order fields**: target price input (shown only when Limit tab is active)
+- **Recurring order fields**: interval selector and number of orders (shown only when Recurring tab is active)
+- **Recent Trades panel** for the selected token — last 10-15 trades showing time, side (buy/sell), amount, price; pulled from Odin.fun trades API
+- **Price Impact** indicator in the trade summary area (estimated % impact based on order size vs market cap/liquidity)
+- **Two-way synced inputs**: entering BTC amount auto-calculates token amount and vice versa (two input fields visible simultaneously)
+- **Token selector improvement**: show token logo, name, ticker, price, 24h change in the selector trigger button (not just a search box)
 
 ### Modify
-- `DashboardPage.tsx`: add `PlatformStatsSection` at the top of the dashboard layout (above `LargeTransactionsFeed`)
-- `odinApi.ts`: add `getStatsDashboard()` function that fetches and returns the statistics/dashboard data
+- Layout changed to Jupiter-style:
+  - **Desktop**: 3-column — [chart + recent trades on left, wide] | [trade form, right]
+  - **Mobile**: stacked vertically — order type tabs → buy/sell → chart (collapsible) → form → recent trades
+- Token info card expanded to include: price in sats, 24h % change, market cap, volume, holders
+- Slippage settings moved to a small gear icon popover (not always visible)
+- Estimated output display enhanced: show both token and USD equivalent
+- Buy/Sell CTA button styled more prominently (full width, larger)
 
 ### Remove
-- Nothing removed
+- Old static token info card replaced by richer inline version
+- Slippage inline section removed in favor of popover
 
 ## Implementation Plan
-1. Add `getStatsDashboard()` to `odinApi.ts` returning the full stats object (bonded, tokens, total_users, total_value_tokens, total_volume_24h, total_volume_all, value_liquidity, trades_30d, activities_30d)
-2. Create `PlatformStatsSection` component inside `DashboardPage.tsx`:
-   - Fetches stats on mount, refreshes every 60s
-   - Shows 4 stat cards in a 2x2 grid (mobile) / 4-col row (desktop): Total Tokens, Bonded, Total Users, Total Liquidity USD
-   - Shows All-time Volume and 24h Volume
-   - Renders a simple 30-day bar chart using inline SVG or div bars (no extra chart library needed) showing daily volume in USD
-   - All milli-sat values converted to USD using BTC price from `useBtcPrice`
-3. Insert `<PlatformStatsSection />` at the top of the `DashboardPage` return JSX, above `LargeTransactionsFeed`
+1. Restructure TradingPage layout to Jupiter-style 2-panel: left (chart + recent trades), right (order form)
+2. Add order type tabs (Market / Limit / Recurring) with conditional fields for each
+3. Integrate TokenPriceChart component inline for selected token using the existing chart logic
+4. Add Recent Trades panel fetching from `GET https://api.odin.fun/v1/tokens/{id}/trades?limit=15`
+5. Implement two-way input: BTC input auto-calculates token amount and vice versa using current price
+6. Add Price Impact estimate calculation: `(orderSizeInBtc / totalLiquidityBtc) * 100`
+7. Move slippage settings to a settings popover (gear icon)
+8. Enhance token selector trigger button to show logo/ticker/price/change
+9. Ensure full mobile responsiveness: stacked layout on small screens with collapsible chart
+10. All text in English, no boxed numbers, usernames blue and clickable, tickers white

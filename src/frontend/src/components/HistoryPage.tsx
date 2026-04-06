@@ -698,7 +698,7 @@ export function HistoryPage({
                                 t.user || t.user_username || "",
                               )
                             }
-                            className="text-[11px] text-muted-foreground hover:text-primary hover:underline transition-colors cursor-pointer truncate"
+                            className="text-[11px] text-blue-400 hover:text-blue-300 hover:underline transition-colors cursor-pointer truncate"
                           >
                             {trader}
                           </button>

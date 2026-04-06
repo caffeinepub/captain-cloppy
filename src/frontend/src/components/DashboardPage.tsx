@@ -521,7 +521,7 @@ function LargeTransactionsFeed({
                 <button
                   type="button"
                   onClick={() => handleTickerClick(trade.token_id)}
-                  className="text-xs font-bold text-foreground min-w-[36px] text-left hover:text-primary hover:underline transition-colors cursor-pointer"
+                  className="text-xs font-bold text-white min-w-[36px] text-left hover:text-white/80 hover:underline transition-colors cursor-pointer"
                   title={ticker}
                 >
                   {ticker}
@@ -551,7 +551,7 @@ function LargeTransactionsFeed({
                           trade.user || trade.user_username || "",
                         )
                       }
-                      className="text-[9px] text-muted-foreground/70 font-mono hover:text-primary hover:underline transition-colors cursor-pointer"
+                      className="text-[9px] text-blue-400 font-mono hover:text-blue-300 hover:underline transition-colors cursor-pointer"
                     >
                       {trade.user_username || truncatePrincipal(trade.user)}
                     </button>
@@ -697,7 +697,7 @@ function GlobalFeedMini({
                   <button
                     type="button"
                     onClick={() => handleTickerClick(trade.token_id)}
-                    className="text-xs font-bold text-foreground min-w-[36px] text-left hover:text-primary hover:underline transition-colors cursor-pointer"
+                    className="text-xs font-bold text-white min-w-[36px] text-left hover:text-white/80 hover:underline transition-colors cursor-pointer"
                     title={ticker}
                   >
                     {ticker}
@@ -720,7 +720,7 @@ function GlobalFeedMini({
                             trade.user || trade.user_username || "",
                           )
                         }
-                        className="text-[9px] text-muted-foreground/70 font-mono hover:text-primary hover:underline transition-colors cursor-pointer"
+                        className="text-[9px] text-blue-400 font-mono hover:text-blue-300 hover:underline transition-colors cursor-pointer"
                       >
                         {trade.user_username || truncatePrincipal(trade.user)}
                       </button>
