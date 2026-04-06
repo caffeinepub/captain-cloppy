@@ -60,6 +60,15 @@ const SELL_PRESETS = [
   { label: "MAX", value: 1.0 },
 ];
 
+function formatUsd(usd: number): string {
+  if (usd === 0) return "$0";
+  if (usd < 0.01) return `$${usd.toFixed(6)}`;
+  if (usd < 1) return `$${usd.toFixed(4)}`;
+  if (usd >= 1000)
+    return `$${usd.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  return `$${usd.toFixed(2)}`;
+}
+
 function TokenImage({ token }: { token: OdinToken }) {
   const [err, setErr] = useState(false);
   const url = getTokenImageUrl(token.id);
@@ -120,9 +129,10 @@ function shortenAddress(addr: string): string {
 interface RecentTradesProps {
   tokenId: string;
   ticker: string;
+  btcUsd: number;
 }
 
-function RecentTrades({ tokenId, ticker }: RecentTradesProps) {
+function RecentTrades({ tokenId, ticker, btcUsd }: RecentTradesProps) {
   const [trades, setTrades] = useState<OdinTrade[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -212,6 +222,9 @@ function RecentTrades({ tokenId, ticker }: RecentTradesProps) {
             const priceInSats = trade.price / ODIN_PRICE_DIVISOR;
             const displayName =
               trade.user_username || shortenAddress(trade.user);
+            // Calculate USD value from amount_btc (milli-sats)
+            const tradeUsd =
+              btcUsd > 0 ? (trade.amount_btc / 1000 / 100_000_000) * btcUsd : 0;
             return (
               <div
                 key={trade.id}
@@ -230,10 +243,15 @@ function RecentTrades({ tokenId, ticker }: RecentTradesProps) {
                     {displayName}
                   </span>
                 </div>
-                <div className="text-right">
+                <div className="text-right flex flex-col gap-0.5">
                   <span className="text-xs text-foreground font-mono">
                     {formatTokenAmt(trade.amount_token, ticker)}
                   </span>
+                  {tradeUsd > 0 && (
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      {formatUsd(tradeUsd)}
+                    </span>
+                  )}
                 </div>
                 <div className="text-right">
                   <span className="text-xs text-muted-foreground font-mono">
@@ -286,6 +304,58 @@ export function TradingPage({
   const addTradeLog = useAddTradeLog();
   const initialTokenRef = useRef(initialToken);
   const { btcUsd } = useBtcPrice();
+  const btcUsdSafe = btcUsd ?? 0;
+
+  // -----------------------------------------------------------------------
+  // Load top tokens by market cap (for empty-query state)
+  // -----------------------------------------------------------------------
+  const loadTopTokens = useCallback(async () => {
+    setSearchLoading(true);
+    try {
+      const res = await fetch(
+        "https://api.odin.fun/v1/tokens?limit=30&sort=market_cap:desc",
+      );
+      if (!res.ok) throw new Error("fetch failed");
+      const json = await res.json();
+      const raw: OdinToken[] = (json.data ?? json ?? []).map(
+        (t: OdinToken) => ({
+          ...t,
+          marketcap: t.marketcap ?? (t as any).market_cap ?? 0,
+        }),
+      );
+      // Sort descending by marketcap
+      raw.sort((a, b) => (b.marketcap ?? 0) - (a.marketcap ?? 0));
+      setTokens(raw);
+      setShowDropdown(true);
+    } catch {
+      setTokens([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  // -----------------------------------------------------------------------
+  // Search tokens
+  // -----------------------------------------------------------------------
+  const doSearch = useCallback(
+    async (q: string) => {
+      if (!q.trim()) {
+        loadTopTokens();
+        return;
+      }
+      setSearchLoading(true);
+      try {
+        const results = await searchTokens(q);
+        setTokens(results);
+        setShowDropdown(true);
+      } catch {
+        setTokens([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    },
+    [loadTopTokens],
+  );
 
   // Sync initialToken
   useEffect(() => {
@@ -312,24 +382,7 @@ export function TradingPage({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) {
-      setTokens([]);
-      setShowDropdown(false);
-      return;
-    }
-    setSearchLoading(true);
-    try {
-      const results = await searchTokens(q);
-      setTokens(results);
-      setShowDropdown(true);
-    } catch {
-      setTokens([]);
-    } finally {
-      setSearchLoading(false);
-    }
-  }, []);
-
+  // Debounced search on query change
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
@@ -337,33 +390,45 @@ export function TradingPage({
         skipNextSearch.current = false;
         return;
       }
-      doSearch(query);
+      if (showDropdown) {
+        doSearch(query);
+      }
     }, 400);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, doSearch]);
+  }, [query, doSearch, showDropdown]);
 
-  const handleSelectToken = (token: OdinToken) => {
-    setSelectedToken(token);
+  const handleSelectToken = useCallback((token: OdinToken) => {
+    // Set flag to ignore next debounced search triggered by query change
     skipNextSearch.current = true;
+    // Clear any pending debounce immediately
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    // Update all state atomically
+    setSelectedToken(token);
     setQuery(token.ticker);
     setShowDropdown(false);
     setBtcAmount("");
     setTokenAmount("");
-  };
+  }, []);
 
   // Price in BTC per token
   const priceInBtcPerToken = selectedToken
     ? selectedToken.price / ODIN_PRICE_DIVISOR / SATS_PER_BTC
     : 0;
 
+  // USD price of selected token
+  const tokenUsdPrice =
+    priceInBtcPerToken > 0 && btcUsdSafe > 0
+      ? priceInBtcPerToken * btcUsdSafe
+      : 0;
+
   // Two-way sync: btcAmount changes -> update tokenAmount
   const handleBtcAmountChange = (val: string) => {
     setBtcAmount(val);
     if (val && priceInBtcPerToken > 0 && !Number.isNaN(Number(val))) {
-      const tokens = Number(val) / priceInBtcPerToken;
-      setTokenAmount(tokens > 0 ? tokens.toFixed(2) : "");
+      const toks = Number(val) / priceInBtcPerToken;
+      setTokenAmount(toks > 0 ? toks.toFixed(2) : "");
     } else {
       setTokenAmount("");
     }
@@ -401,6 +466,41 @@ export function TradingPage({
     if (!mcapInBtc || mcapInBtc <= 0) return null;
     const impact = (orderBtc / (mcapInBtc * 0.2)) * 100;
     return impact;
+  })();
+
+  // USD equivalent helpers for the form
+  const payUsd = (() => {
+    const isBuy = tradeType === "buy";
+    if (isBuy) {
+      const btc = Number(btcAmount);
+      if (!btcAmount || Number.isNaN(btc) || btc <= 0) return null;
+      return btc * btcUsdSafe;
+    }
+    // Sell: top input is token amount, compute BTC then USD
+    const toks = Number(tokenAmount);
+    if (
+      !tokenAmount ||
+      Number.isNaN(toks) ||
+      toks <= 0 ||
+      priceInBtcPerToken <= 0
+    )
+      return null;
+    return toks * priceInBtcPerToken * btcUsdSafe;
+  })();
+
+  const receiveUsd = (() => {
+    const isBuy = tradeType === "buy";
+    if (isBuy) {
+      // Receive tokens — estimate USD
+      const toks = Number(tokenAmount);
+      if (!tokenAmount || Number.isNaN(toks) || toks <= 0 || tokenUsdPrice <= 0)
+        return null;
+      return toks * tokenUsdPrice;
+    }
+    // Sell: receive BTC
+    const btc = Number(btcAmount);
+    if (!btcAmount || Number.isNaN(btc) || btc <= 0) return null;
+    return btc * btcUsdSafe;
   })();
 
   const handlePlaceOrder = async () => {
@@ -457,7 +557,16 @@ export function TradingPage({
     <button
       type="button"
       data-ocid="trading.token_select.button"
-      onClick={() => setShowDropdown((v) => !v)}
+      onClick={() => {
+        if (!showDropdown) {
+          setShowDropdown(true);
+          if (!query.trim()) {
+            loadTopTokens();
+          }
+        } else {
+          setShowDropdown(false);
+        }
+      }}
       className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 hover:bg-muted/40 transition-colors w-full"
     >
       {selectedToken ? (
@@ -488,6 +597,11 @@ export function TradingPage({
             </div>
             <p className="text-xs text-muted-foreground truncate">
               {formatPriceAsSats(selectedToken.price)}
+              {tokenUsdPrice > 0 && (
+                <span className="ml-1 text-muted-foreground/70">
+                  ({formatUsd(tokenUsdPrice)})
+                </span>
+              )}
             </p>
           </div>
         </>
@@ -532,7 +646,7 @@ export function TradingPage({
       >
         {tokens.length === 0 && !searchLoading && (
           <p className="p-4 text-center text-sm text-muted-foreground">
-            {query.trim() ? "No tokens found" : "Type to search tokens"}
+            {query.trim() ? "No tokens found" : "Loading tokens..."}
           </p>
         )}
         {tokens.map((token) => {
@@ -599,6 +713,11 @@ export function TradingPage({
         <span className="text-xs font-mono font-semibold text-foreground">
           {formatPriceAsSats(selectedToken.price)}
         </span>
+        {tokenUsdPrice > 0 && (
+          <span className="text-xs text-muted-foreground/70 font-mono">
+            ({formatUsd(tokenUsdPrice)})
+          </span>
+        )}
       </div>
       {priceChange !== null && (
         <div
@@ -807,6 +926,11 @@ export function TradingPage({
               }
               className="w-full bg-transparent text-xl font-mono font-bold text-foreground outline-none placeholder:text-muted-foreground/40"
             />
+            {payUsd !== null && btcUsdSafe > 0 && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {formatUsd(payUsd)}
+              </p>
+            )}
           </div>
 
           {/* Swap arrow */}
@@ -829,7 +953,7 @@ export function TradingPage({
           <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                {isBuy ? "You Receive" : "You Receive"}
+                You Receive
               </span>
               <span className="text-[10px] font-semibold text-muted-foreground">
                 {isBuy ? (selectedToken?.ticker ?? "TOKEN") : "BTC"}
@@ -848,6 +972,11 @@ export function TradingPage({
               }
               className="flex-1 w-full bg-transparent text-xl font-mono font-bold text-foreground outline-none placeholder:text-muted-foreground/40"
             />
+            {receiveUsd !== null && btcUsdSafe > 0 && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {formatUsd(receiveUsd)}
+              </p>
+            )}
           </div>
         </div>
 
@@ -1053,6 +1182,7 @@ export function TradingPage({
             {showChart && (
               <div className="px-3 pb-3">
                 <TokenPriceChart
+                  key={selectedToken.id}
                   tokenId={selectedToken.id}
                   currentPrice={selectedToken.price}
                 />
@@ -1068,8 +1198,10 @@ export function TradingPage({
         {selectedToken && (
           <div className="rounded-xl border border-border bg-card p-4">
             <RecentTrades
+              key={selectedToken.id}
               tokenId={selectedToken.id}
               ticker={selectedToken.ticker}
+              btcUsd={btcUsdSafe}
             />
           </div>
         )}
@@ -1094,6 +1226,7 @@ export function TradingPage({
           <div className="rounded-xl border border-border bg-card p-4">
             {selectedToken ? (
               <TokenPriceChart
+                key={selectedToken.id}
                 tokenId={selectedToken.id}
                 currentPrice={selectedToken.price}
               />
@@ -1111,8 +1244,10 @@ export function TradingPage({
           <div className="rounded-xl border border-border bg-card p-4">
             {selectedToken ? (
               <RecentTrades
+                key={selectedToken.id}
                 tokenId={selectedToken.id}
                 ticker={selectedToken.ticker}
+                btcUsd={btcUsdSafe}
               />
             ) : (
               <div className="py-8 text-center text-sm text-muted-foreground">
