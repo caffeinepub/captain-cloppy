@@ -12,7 +12,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowDownUp,
   ChevronDown,
-  Coins,
   Loader2,
   RefreshCw,
   Settings2,
@@ -278,12 +277,9 @@ export function TradingPage({
 }: TradingPageProps) {
   // Token state
   const [tokens, setTokens] = useState<OdinToken[]>([]);
-  const [tokensLoading, setTokensLoading] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
   const [selectedToken, setSelectedToken] = useState<OdinToken | null>(
     initialToken ?? null,
   );
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Trade form state
   const [tradeType, setTradeType] = useState<"buy" | "sell">("buy");
@@ -303,10 +299,9 @@ export function TradingPage({
   const btcUsdSafe = btcUsd ?? 0;
 
   // -----------------------------------------------------------------------
-  // Load top tokens by market cap
+  // Load top tokens by market cap and auto-select #1 on mount
   // -----------------------------------------------------------------------
-  const loadTopTokens = useCallback(async () => {
-    setTokensLoading(true);
+  const loadAndAutoSelectToken = useCallback(async () => {
     try {
       const res = await fetch(
         "https://api.odin.fun/v1/tokens?limit=30&sort=market_cap:desc",
@@ -322,43 +317,37 @@ export function TradingPage({
       // Sort descending by marketcap
       raw.sort((a, b) => (b.marketcap ?? 0) - (a.marketcap ?? 0));
       setTokens(raw);
-      setShowDropdown(true);
+      // Auto-select the top token if no initialToken was provided
+      if (!initialTokenRef.current && raw.length > 0) {
+        setSelectedToken(raw[0]);
+      }
     } catch {
       setTokens([]);
-    } finally {
-      setTokensLoading(false);
     }
   }, []);
 
-  // Sync initialToken
+  // Auto-load on mount
+  useEffect(() => {
+    loadAndAutoSelectToken();
+  }, [loadAndAutoSelectToken]);
+
+  // Sync initialToken when it changes
   useEffect(() => {
     if (initialToken && initialToken.id !== initialTokenRef.current?.id) {
       initialTokenRef.current = initialToken;
       setSelectedToken(initialToken);
-      setShowDropdown(false);
     }
   }, [initialToken]);
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
-        setShowDropdown(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
   const handleSelectToken = useCallback((token: OdinToken) => {
     setSelectedToken(token);
-    setShowDropdown(false);
     setBtcAmount("");
     setTokenAmount("");
   }, []);
+
+  // suppress unused warning — kept for potential future use
+  void tokens;
+  void handleSelectToken;
 
   // Price in BTC per token
   const priceInBtcPerToken = selectedToken
@@ -499,142 +488,53 @@ export function TradingPage({
   const isBuy = tradeType === "buy";
 
   // -----------------------------------------------------------------------
-  // Token Selector Trigger Button
+  // Selected token header bar (shown instead of selector)
   // -----------------------------------------------------------------------
-  const TokenSelectorTrigger = (
-    <button
-      type="button"
-      data-ocid="trading.token_select.button"
-      onClick={() => {
-        if (!showDropdown) {
-          loadTopTokens();
-        } else {
-          setShowDropdown(false);
-        }
-      }}
-      className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 hover:bg-muted/40 transition-colors w-full"
-    >
-      {selectedToken ? (
-        <>
-          <div className="h-8 w-8 shrink-0 rounded-full overflow-hidden ring-1 ring-primary/20">
-            <TokenImage token={selectedToken} />
-          </div>
-          <div className="flex-1 min-w-0 text-left">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-bold text-foreground">
-                {selectedToken.ticker}
-              </span>
-              {selectedToken.bonded && <BondedCheckmark />}
-              {priceChange !== null && (
-                <span
-                  className={`text-xs font-semibold ml-1 ${
-                    priceChange > 0
-                      ? "text-emerald-400"
-                      : priceChange < 0
-                        ? "text-red-400"
-                        : "text-muted-foreground"
-                  }`}
-                >
-                  {priceChange > 0 ? "+" : ""}
-                  {priceChange.toFixed(2)}%
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground truncate">
-              {formatPriceAsSats(selectedToken.price)}
-              {tokenUsdPrice > 0 && (
-                <span className="ml-1 text-muted-foreground/70">
-                  ({formatUsd(tokenUsdPrice)})
-                </span>
-              )}
-            </p>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="h-8 w-8 shrink-0 rounded-full bg-muted/50 flex items-center justify-center">
-            <Coins className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <span className="flex-1 text-left text-sm text-muted-foreground">
-            Select a token
+  const TokenHeaderBar = selectedToken ? (
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5">
+      <div className="h-9 w-9 shrink-0 rounded-full overflow-hidden ring-1 ring-primary/20">
+        <TokenImage token={selectedToken} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-bold text-foreground">
+            {selectedToken.ticker}
           </span>
-        </>
-      )}
-      <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-    </button>
-  );
-
-  // -----------------------------------------------------------------------
-  // Token Selector Dropdown
-  // -----------------------------------------------------------------------
-  const TokenSelectorDropdown = showDropdown && (
-    <div className="absolute z-50 left-0 right-0 top-[calc(100%+4px)] rounded-xl border border-border bg-popover shadow-xl overflow-hidden">
-      <div
-        className="max-h-56 overflow-y-auto"
-        data-ocid="trading.token.dropdown_menu"
-      >
-        {tokens.length === 0 && tokensLoading && (
-          <div className="p-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading tokens...
-          </div>
-        )}
-        {tokens.length === 0 && !tokensLoading && (
-          <p className="p-4 text-center text-sm text-muted-foreground">
-            No tokens found
+          {selectedToken.bonded && <BondedCheckmark />}
+          {priceChange !== null && (
+            <span
+              className={`text-xs font-semibold ml-1 ${
+                priceChange > 0
+                  ? "text-emerald-400"
+                  : priceChange < 0
+                    ? "text-red-400"
+                    : "text-muted-foreground"
+              }`}
+            >
+              {priceChange > 0 ? "+" : ""}
+              {priceChange.toFixed(2)}%
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground truncate">
+          {selectedToken.name}
+        </p>
+      </div>
+      <div className="text-right shrink-0">
+        <p className="text-xs font-mono font-semibold text-foreground">
+          {formatPriceAsSats(selectedToken.price)}
+        </p>
+        {tokenUsdPrice > 0 && (
+          <p className="text-[10px] text-muted-foreground font-mono">
+            {formatUsd(tokenUsdPrice)}
           </p>
         )}
-        {tokens.map((token) => {
-          const change = token.price_1d
-            ? ((token.price - token.price_1d) /
-                Math.max(1, Math.abs(token.price_1d))) *
-              100
-            : null;
-          return (
-            <button
-              type="button"
-              key={token.id}
-              onClick={() => handleSelectToken(token)}
-              className="flex w-full items-center justify-between px-3 py-2.5 hover:bg-muted/60 transition-colors border-b border-border/30 last:border-b-0"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="h-8 w-8 shrink-0 rounded-full overflow-hidden ring-1 ring-primary/20">
-                  <TokenImage token={token} />
-                </div>
-                <div className="text-left">
-                  <div className="flex items-center gap-1">
-                    <p className="text-sm font-semibold text-foreground">
-                      {token.ticker}
-                    </p>
-                    {token.bonded && <BondedCheckmark />}
-                  </div>
-                  <p className="text-xs text-muted-foreground">{token.name}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-xs font-mono text-foreground">
-                  {formatPriceAsSats(token.price)}
-                </p>
-                {change !== null && (
-                  <p
-                    className={`text-[10px] font-semibold ${
-                      change > 0 ? "text-emerald-400" : "text-red-400"
-                    }`}
-                  >
-                    {change > 0 ? "+" : ""}
-                    {change.toFixed(2)}%
-                  </p>
-                )}
-                <p className="text-[10px] text-muted-foreground">
-                  {token.marketcap
-                    ? formatMcapAsUsd(token.marketcap, btcUsd)
-                    : ""}
-                </p>
-              </div>
-            </button>
-          );
-        })}
       </div>
+    </div>
+  ) : (
+    <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5">
+      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      <span className="text-sm text-muted-foreground">Loading...</span>
     </div>
   );
 
@@ -1089,11 +989,8 @@ export function TradingPage({
           MOBILE LAYOUT (< lg)
           ================================================================ */}
       <div className="lg:hidden space-y-3">
-        {/* Token selector */}
-        <div className="relative" ref={dropdownRef}>
-          {TokenSelectorTrigger}
-          {TokenSelectorDropdown}
-        </div>
+        {/* Token header bar */}
+        {TokenHeaderBar}
 
         {/* Token info bar */}
         {TokenInfoBar}
@@ -1148,11 +1045,8 @@ export function TradingPage({
       <div className="hidden lg:grid lg:grid-cols-[1fr_380px] gap-4">
         {/* LEFT COLUMN */}
         <div className="space-y-3 min-w-0">
-          {/* Token selector */}
-          <div className="relative" ref={dropdownRef}>
-            {TokenSelectorTrigger}
-            {TokenSelectorDropdown}
-          </div>
+          {/* Token header bar */}
+          {TokenHeaderBar}
 
           {/* Token info bar */}
           {TokenInfoBar}
@@ -1167,10 +1061,8 @@ export function TradingPage({
               />
             ) : (
               <div className="h-[300px] flex flex-col items-center justify-center gap-3 text-center">
-                <Coins className="h-10 w-10 text-muted-foreground/30" />
-                <p className="text-sm text-muted-foreground">
-                  Select a token to view chart
-                </p>
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">Loading...</p>
               </div>
             )}
           </div>
@@ -1185,8 +1077,8 @@ export function TradingPage({
                 btcUsd={btcUsdSafe}
               />
             ) : (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                Select a token to view recent trades
+              <div className="py-8 text-center">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/40 mx-auto" />
               </div>
             )}
           </div>
