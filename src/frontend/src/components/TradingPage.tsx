@@ -268,6 +268,7 @@ export function TradingPage({
     initialToken ?? null,
   );
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const skipNextSearch = useRef(false);
 
   // Trade form state
   const [tradeType, setTradeType] = useState<"buy" | "sell">("buy");
@@ -291,6 +292,7 @@ export function TradingPage({
     if (initialToken && initialToken.id !== initialTokenRef.current?.id) {
       initialTokenRef.current = initialToken;
       setSelectedToken(initialToken);
+      skipNextSearch.current = true;
       setQuery(initialToken.ticker);
       setShowDropdown(false);
     }
@@ -330,7 +332,13 @@ export function TradingPage({
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => doSearch(query), 400);
+    debounceRef.current = setTimeout(() => {
+      if (skipNextSearch.current) {
+        skipNextSearch.current = false;
+        return;
+      }
+      doSearch(query);
+    }, 400);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -338,6 +346,7 @@ export function TradingPage({
 
   const handleSelectToken = (token: OdinToken) => {
     setSelectedToken(token);
+    skipNextSearch.current = true;
     setQuery(token.ticker);
     setShowDropdown(false);
     setBtcAmount("");
@@ -392,17 +401,6 @@ export function TradingPage({
     if (!mcapInBtc || mcapInBtc <= 0) return null;
     const impact = (orderBtc / (mcapInBtc * 0.2)) * 100;
     return impact;
-  })();
-
-  // USD equivalent of token output
-  const tokenAmountUsd = (() => {
-    if (!tokenAmount || !btcUsd || !priceInBtcPerToken) return null;
-    const tokens = Number(tokenAmount);
-    if (Number.isNaN(tokens) || tokens <= 0) return null;
-    const btcValue = tokens * priceInBtcPerToken;
-    const usd = btcValue * btcUsd;
-    if (usd < 0.01) return "<$0.01";
-    return `~$${usd.toFixed(2)}`;
   })();
 
   const handlePlaceOrder = async () => {
@@ -837,26 +835,19 @@ export function TradingPage({
                 {isBuy ? (selectedToken?.ticker ?? "TOKEN") : "BTC"}
               </span>
             </div>
-            <div className="flex items-end gap-2">
-              <input
-                data-ocid="trading.token_amount.input"
-                type="number"
-                min="0"
-                placeholder="0"
-                value={isBuy ? tokenAmount : btcAmount}
-                onChange={(e) =>
-                  isBuy
-                    ? handleTokenAmountChange(e.target.value)
-                    : handleBtcAmountChange(e.target.value)
-                }
-                className="flex-1 bg-transparent text-xl font-mono font-bold text-foreground outline-none placeholder:text-muted-foreground/40"
-              />
-              {tokenAmountUsd && isBuy && (
-                <span className="text-xs text-muted-foreground pb-0.5">
-                  {tokenAmountUsd}
-                </span>
-              )}
-            </div>
+            <input
+              data-ocid="trading.token_amount.input"
+              type="number"
+              min="0"
+              placeholder="0"
+              value={isBuy ? tokenAmount : btcAmount}
+              onChange={(e) =>
+                isBuy
+                  ? handleTokenAmountChange(e.target.value)
+                  : handleBtcAmountChange(e.target.value)
+              }
+              className="flex-1 w-full bg-transparent text-xl font-mono font-bold text-foreground outline-none placeholder:text-muted-foreground/40"
+            />
           </div>
         </div>
 
