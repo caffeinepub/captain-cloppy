@@ -450,12 +450,21 @@ export function TradingPage({
       ? priceInBtcPerToken * btcUsdSafe
       : 0;
 
-  // Two-way sync: btcAmount changes -> update tokenAmount using AMM formula
+  // Two-way sync: btcAmount changes -> update tokenAmount using AMM formula (or limit price)
   const handleBtcAmountChange = (val: string) => {
     setBtcAmount(val);
     if (val && !Number.isNaN(Number(val)) && Number(val) > 0) {
       let toks = 0;
+      // For limit orders: use the target price input by the user (price in sats)
       if (
+        orderType === "limit" &&
+        limitPrice &&
+        !Number.isNaN(Number(limitPrice)) &&
+        Number(limitPrice) > 0
+      ) {
+        const limitPriceInBtc = Number(limitPrice) / 100_000_000; // sats -> BTC
+        toks = Number(val) / limitPriceInBtc;
+      } else if (
         tokenDetail &&
         tokenDetail.btc_liquidity > 0 &&
         tokenDetail.token_liquidity > 0
@@ -474,12 +483,21 @@ export function TradingPage({
     }
   };
 
-  // Two-way sync: tokenAmount changes -> update btcAmount using AMM inverse
+  // Two-way sync: tokenAmount changes -> update btcAmount using AMM inverse (or limit price)
   const handleTokenAmountChange = (val: string) => {
     setTokenAmount(val);
     if (val && !Number.isNaN(Number(val)) && Number(val) > 0) {
       let btc = 0;
+      // For limit orders: use the target price input by the user (price in sats)
       if (
+        orderType === "limit" &&
+        limitPrice &&
+        !Number.isNaN(Number(limitPrice)) &&
+        Number(limitPrice) > 0
+      ) {
+        const limitPriceInBtc = Number(limitPrice) / 100_000_000; // sats -> BTC
+        btc = Number(val) * limitPriceInBtc;
+      } else if (
         tokenDetail &&
         tokenDetail.btc_liquidity > 0 &&
         tokenDetail.token_liquidity > 0
@@ -495,6 +513,22 @@ export function TradingPage({
       setBtcAmount(btc > 0 ? btc.toFixed(8) : "");
     } else {
       setBtcAmount("");
+    }
+  };
+
+  // Handler for limit price changes — recalculates token amount based on new target price
+  const handleLimitPriceChange = (val: string) => {
+    setLimitPrice(val);
+    if (
+      val &&
+      !Number.isNaN(Number(val)) &&
+      Number(val) > 0 &&
+      btcAmount &&
+      Number(btcAmount) > 0
+    ) {
+      const limitPriceInBtc = Number(val) / 100_000_000; // sats -> BTC
+      const toks = Number(btcAmount) / limitPriceInBtc;
+      setTokenAmount(toks > 0 ? toks.toFixed(2) : "");
     }
   };
 
@@ -833,7 +867,7 @@ export function TradingPage({
                   : "0"
               }
               value={limitPrice}
-              onChange={(e) => setLimitPrice(e.target.value)}
+              onChange={(e) => handleLimitPriceChange(e.target.value)}
               className="bg-muted/40 border-border font-mono"
             />
           </div>
