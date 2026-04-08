@@ -21,8 +21,9 @@ import {
   Wifi,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { TradeStatus } from "../backend";
 import { useBtcPrice } from "../hooks/useBtcPrice";
-import { TradeStatus, useGetTradeLogs } from "../hooks/useQueries";
+import { useGetTradeLogs } from "../hooks/useQueries";
 import {
   type OdinToken,
   type OdinTrade,

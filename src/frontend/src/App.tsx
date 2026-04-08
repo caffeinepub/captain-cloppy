@@ -104,9 +104,6 @@ export default function App() {
   };
 
   const handleNavigate = (p: NavPage) => {
-    // Clear any previously selected token when navigating directly to Trading
-    // so the auto-select logic picks the #1 market cap token on fresh open
-    if (p === "trading") setSelectedToken(undefined);
     setPage(p);
     setSidebarOpen(false);
     setViewedTraderPrincipal("");
