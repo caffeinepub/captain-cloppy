@@ -12,9 +12,9 @@ import { Switch } from "@/components/ui/switch";
 import { Loader2, Pause, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { TradeType } from "../backend";
 import {
   type Strategy,
+  TradeType,
   useCreateOrUpdateStrategy,
   useDeleteStrategy,
   useListStrategies,

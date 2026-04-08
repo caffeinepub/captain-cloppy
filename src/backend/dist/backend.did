@@ -1,0 +1,40 @@
+type TradeType = 
+ variant {
+   buy;
+   sell;
+ };
+type TradeStatus = 
+ variant {
+   completed;
+   failed;
+   pending;
+ };
+type TradeLog = 
+ record {
+   amountBtc: float64;
+   amountToken: float64;
+   price: float64;
+   status: TradeStatus;
+   timestamp: int;
+   tokenId: text;
+   tradeType: TradeType;
+ };
+type Strategy = 
+ record {
+   active: bool;
+   autoRepeat: bool;
+   maxTradeSize: float64;
+   name: text;
+   priceTarget: float64;
+   stopLoss: float64;
+   tokenId: text;
+   tradeType: TradeType;
+ };
+service : {
+  addTradeLog: (log: TradeLog) -> ();
+  createOrUpdateStrategy: (strategy: Strategy) -> ();
+  deleteStrategy: (name: text) -> ();
+  getTradeLogs: () -> (vec TradeLog) query;
+  listStrategies: () -> (vec Strategy) query;
+  toggleStrategyActive: (name: text) -> (Strategy);
+}

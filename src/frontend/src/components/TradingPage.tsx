@@ -21,9 +21,8 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { TradeStatus, TradeType } from "../backend";
 import { useBtcPrice } from "../hooks/useBtcPrice";
-import { useAddTradeLog } from "../hooks/useQueries";
+import { TradeStatus, TradeType, useAddTradeLog } from "../hooks/useQueries";
 import {
   ODIN_PRICE_DIVISOR,
   type OdinToken,
@@ -313,6 +312,7 @@ export function TradingPage({
 }: TradingPageProps) {
   // Token state
   const [tokens, setTokens] = useState<OdinToken[]>([]);
+  // Only pre-populate selectedToken if an explicit initialToken was passed in
   const [selectedToken, setSelectedToken] = useState<OdinToken | null>(
     initialToken ?? null,
   );
@@ -336,7 +336,9 @@ export function TradingPage({
   } | null>(null);
 
   const addTradeLog = useAddTradeLog();
-  const initialTokenRef = useRef(initialToken);
+  // Track what token was explicitly passed in — only a defined initialToken
+  // should block the auto-select logic. undefined means "no token provided".
+  const initialTokenRef = useRef<OdinToken | undefined>(initialToken);
   const { btcUsd } = useBtcPrice();
   const btcUsdSafe = btcUsd ?? 0;
 
@@ -353,19 +355,25 @@ export function TradingPage({
       const raw: OdinToken[] = (json.data ?? json ?? []).map(
         (t: OdinToken) => ({
           ...t,
-          marketcap: t.marketcap ?? (t as any).market_cap ?? 0,
+          // Normalize: API may return market_cap or marketcap
+          marketcap:
+            (t as OdinToken & { market_cap?: number }).market_cap ??
+            t.marketcap ??
+            0,
         }),
       );
-      // Sort descending by marketcap
+      // Always sort descending by marketcap to guarantee #1 is raw[0]
       raw.sort((a, b) => (b.marketcap ?? 0) - (a.marketcap ?? 0));
       setTokens(raw);
-      // Auto-select the top token if no initialToken was provided
+
+      // Auto-select the #1 market cap token only when no explicit token was passed in
       if (!initialTokenRef.current && raw.length > 0) {
-        setSelectedToken(raw[0]);
+        const top = raw[0];
+        setSelectedToken(top);
         // Fetch liquidity detail for the auto-selected token
         try {
           const detailRes = await fetch(
-            `https://api.odin.fun/v1/token/${raw[0].id}`,
+            `https://api.odin.fun/v1/token/${top.id}`,
           );
           if (detailRes.ok) {
             const detailData = await detailRes.json();
@@ -393,7 +401,7 @@ export function TradingPage({
     loadAndAutoSelectToken();
   }, [loadAndAutoSelectToken]);
 
-  // Sync initialToken when it changes
+  // Sync when an explicit token is passed in from another page (e.g., Explorer)
   useEffect(() => {
     if (initialToken && initialToken.id !== initialTokenRef.current?.id) {
       initialTokenRef.current = initialToken;
@@ -411,6 +419,10 @@ export function TradingPage({
           }
         })
         .catch(() => {});
+    } else if (!initialToken) {
+      // initialToken was cleared (direct navigation to Trading) — reset ref
+      // so auto-select logic runs on next loadAndAutoSelectToken call
+      initialTokenRef.current = undefined;
     }
   }, [initialToken]);
 
